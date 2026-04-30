@@ -1,0 +1,241 @@
+[
+  {
+    "id": "verify_identity",
+    "description": "Verify the customer before performing sensitive banking support actions.",
+    "inputs": ["customer_id", "verification_method"],
+    "adds": ["identity_verified"],
+    "errors": [
+      "customer_record_not_found",
+      "verification_method_unavailable",
+      "verification_code_expired",
+      "identity_verification_failed"
+    ]
+  },
+  {
+    "id": "find_payment",
+    "description": "Find a pending payment from customer-provided payment details.",
+    "inputs": ["customer_id", "payment_hint"],
+    "adds": ["payment_found"],
+    "errors": [
+      "missing_input",
+      "wrong_parameter",
+      "payment_not_found",
+      "ambiguous_payment_hint",
+      "payment_lookup_unavailable"
+    ]
+  },
+  {
+    "id": "check_payment_status",
+    "description": "Check whether a payment is still pending and cancellable.",
+    "inputs": ["payment_id"],
+    "adds": ["payment_status_checked"],
+    "errors": [
+      "payment_already_processed",
+      "payment_not_cancellable",
+      "payment_status_unavailable",
+      "tool_failure"
+    ]
+  },
+  {
+    "id": "cancel_payment",
+    "description": "Cancel a pending payment.",
+    "inputs": ["payment_id", "reason"],
+    "adds": ["payment_cancelled"],
+    "errors": [
+      "payment_not_found",
+      "payment_already_processed",
+      "payment_not_cancellable",
+      "cancellation_service_unavailable"
+    ]
+  },
+  {
+    "id": "list_recent_transactions",
+    "description": "List recent transactions for a selected bank account.",
+    "inputs": ["account_id", "period"],
+    "adds": ["recent_transactions_listed"],
+    "errors": [
+      "account_not_found",
+      "transaction_history_unavailable",
+      "transaction_history_service_unavailable"
+    ]
+  },
+  {
+    "id": "select_account",
+    "description": "Select the customer's bank account for the document request.",
+    "inputs": ["customer_id", "account_hint"],
+    "adds": ["account_selected"],
+    "errors": [
+      "account_not_found",
+      "ambiguous_account_hint",
+      "account_closed",
+      "account_access_restricted"
+    ]
+  },
+  {
+    "id": "select_card",
+    "description": "Select the customer's card for the document request.",
+    "inputs": ["customer_id", "card_hint"],
+    "adds": ["card_selected"],
+    "errors": [
+      "card_not_found",
+      "ambiguous_card_hint",
+      "card_closed",
+      "card_access_restricted"
+    ]
+  },
+  {
+    "id": "collect_document_period",
+    "description": "Collect the period covered by the requested document.",
+    "inputs": ["start_date", "end_date"],
+    "adds": ["document_period_collected"],
+    "errors": [
+      "start_date_missing",
+      "end_date_missing",
+      "invalid_date_range",
+      "period_exceeds_allowed_history"
+    ]
+  },
+  {
+    "id": "collect_document_format",
+    "description": "Collect the preferred document format.",
+    "inputs": ["format"],
+    "adds": ["document_format_collected"],
+    "errors": [
+      "format_not_specified",
+      "format_not_supported"
+    ]
+  },
+  {
+    "id": "check_document_availability",
+    "description": "Check whether the requested document can be generated for the selected product and period.",
+    "inputs": ["product_id", "document_type", "period"],
+    "adds": ["document_availability_checked"],
+    "errors": [
+      "document_type_not_available_for_product",
+      "period_not_available_for_document",
+      "product_not_eligible_for_document",
+      "document_availability_service_unavailable"
+    ]
+  },
+  {
+    "id": "generate_account_statement",
+    "description": "Generate a formal account statement for a selected bank account and period.",
+    "inputs": ["account_id", "period", "format"],
+    "adds": ["account_statement_generated"],
+    "errors": [
+      "account_statement_period_unavailable",
+      "account_statement_format_unsupported",
+      "account_statement_generation_unavailable"
+    ]
+  },
+  {
+    "id": "generate_card_statement",
+    "description": "Generate a formal card statement for a selected card and period.",
+    "inputs": ["card_id", "period", "format"],
+    "adds": ["card_statement_generated"],
+    "errors": [
+      "card_statement_period_unavailable",
+      "card_statement_format_unsupported",
+      "card_statement_generation_unavailable"
+    ]
+  },
+  {
+    "id": "generate_transaction_statement",
+    "description": "Generate a document listing transactions for a selected account and period.",
+    "inputs": ["account_id", "period", "format"],
+    "adds": ["transaction_statement_generated"],
+    "errors": [
+      "transaction_history_unavailable_for_period",
+      "transaction_statement_format_unsupported",
+      "transaction_statement_generation_unavailable"
+    ]
+  },
+  {
+    "id": "generate_balance_certificate",
+    "description": "Generate a certificate confirming the current account balance.",
+    "inputs": ["account_id", "date", "format"],
+    "adds": ["balance_certificate_generated"],
+    "errors": [
+      "balance_date_not_supported",
+      "current_balance_unavailable",
+      "balance_certificate_generation_unavailable"
+    ]
+  },
+  {
+    "id": "generate_account_ownership_certificate",
+    "description": "Generate a certificate confirming that the customer owns the selected account.",
+    "inputs": ["account_id", "format"],
+    "adds": ["account_ownership_certificate_generated"],
+    "errors": [
+      "ownership_record_unavailable",
+      "account_ownership_certificate_unavailable",
+      "account_ownership_certificate_generation_unavailable"
+    ]
+  },
+  {
+    "id": "generate_fee_statement",
+    "description": "Generate a document summarizing fees charged on the account during a period.",
+    "inputs": ["account_id", "period", "format"],
+    "adds": ["fee_statement_generated"],
+    "errors": [
+      "no_fees_found_for_period",
+      "fee_statement_period_unavailable",
+      "fee_statement_generation_unavailable"
+    ]
+  },
+  {
+    "id": "generate_interest_certificate",
+    "description": "Generate a document summarizing interest paid or earned during a period.",
+    "inputs": ["account_id", "period", "format"],
+    "adds": ["interest_certificate_generated"],
+    "errors": [
+      "no_interest_found_for_period",
+      "interest_certificate_period_unavailable",
+      "interest_certificate_generation_unavailable"
+    ]
+  },
+  {
+    "id": "generate_tax_summary",
+    "description": "Generate a tax-related summary document for the selected account and period.",
+    "inputs": ["account_id", "period", "format"],
+    "adds": ["tax_summary_generated"],
+    "errors": [
+      "tax_year_not_closed",
+      "tax_profile_missing",
+      "tax_summary_generation_unavailable"
+    ]
+  },
+  {
+    "id": "export_transactions_pdf",
+    "description": "Export transaction history as a PDF file.",
+    "inputs": ["account_id", "period"],
+    "adds": ["transactions_pdf_exported"],
+    "errors": [
+      "transaction_export_period_unavailable",
+      "pdf_export_size_limit_exceeded",
+      "pdf_export_generation_unavailable"
+    ]
+  },
+  {
+    "id": "export_transactions_csv",
+    "description": "Export transaction history as a CSV file.",
+    "inputs": ["account_id", "period"],
+    "adds": ["transactions_csv_exported"],
+    "errors": [
+      "transaction_export_period_unavailable",
+      "csv_export_size_limit_exceeded",
+      "csv_export_generation_unavailable"
+    ]
+  },
+  {
+    "id": "send_document_link",
+    "description": "Send the generated document link to the customer.",
+    "inputs": ["customer_id", "document_id", "channel"],
+    "adds": ["document_link_sent"],
+    "errors": [
+      "delivery_channel_unavailable",
+      "document_link_expired_before_delivery",
+      "document_delivery_failed"
+    ]
+  }
+]
