@@ -86,6 +86,12 @@ def _add_common_subcommand_options(parser: argparse.ArgumentParser) -> None:
         default=argparse.SUPPRESS,
         help="Optional path to a generation config JSON file.",
     )
+    parser.add_argument(
+        "--limit-dialogues",
+        type=int,
+        default=argparse.SUPPRESS,
+        help="Optional maximum number of dialogue variants to render.",
+    )
 
 
 def command_generate_case_specs(args: argparse.Namespace) -> None:
@@ -106,7 +112,7 @@ def command_render_dialogues(args: argparse.Namespace) -> None:
     output_dir = Path(args.output_dir)
     case_specs_path = Path(args.case_specs) if args.case_specs else output_dir / "case_specs.json"
     case_specs = read_json(case_specs_path)
-    _render_dialogues(configs, case_specs, output_dir)
+    _render_dialogues(configs, case_specs, output_dir, args.limit_dialogues)
 
 
 def command_run_all(args: argparse.Namespace) -> None:
@@ -118,14 +124,18 @@ def command_run_all(args: argparse.Namespace) -> None:
         configs["case_templates"],
     )
     save_case_specs(case_specs, output_dir / "case_specs.json")
-    _render_dialogues(configs, case_specs, output_dir)
+    _render_dialogues(configs, case_specs, output_dir, args.limit_dialogues)
 
 
 def _render_dialogues(
     configs: dict[str, Any],
     case_specs: list[dict[str, Any]],
     output_dir: Path,
+    limit_dialogues: int | None = None,
 ) -> None:
+    if limit_dialogues is not None and limit_dialogues < 1:
+        raise ValueError("--limit-dialogues must be a positive integer.")
+
     output_dir.mkdir(parents=True, exist_ok=True)
     generation_config = configs["generation_config"]
     selected_specs = _select_case_specs(case_specs, generation_config.get("include_cases", []))
@@ -144,8 +154,14 @@ def _render_dialogues(
         }
     )
 
+    attempted = 0
+    stop = False
     for case_spec in selected_specs:
         for variant_id in range(1, variants_per_case + 1):
+            if limit_dialogues is not None and attempted >= limit_dialogues:
+                stop = True
+                break
+            attempted += 1
             render_config = dict(generation_config)
             render_config["variant_id"] = variant_id
             render_config["case_id"] = case_spec["case_id"]
@@ -191,8 +207,10 @@ def _render_dialogues(
                     "validator_warnings": validation.warnings,
                 }
             )
+        if stop:
+            break
 
-    generated = len(selected_specs) * variants_per_case
+    generated = attempted
     summary = {
         "dataset_version": configs["case_templates"]["version"],
         "generated": generated,

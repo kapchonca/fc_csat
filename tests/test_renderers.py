@@ -33,8 +33,8 @@ def test_openai_renderer_uses_openai_defaults(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
 
-    renderer = get_renderer({"renderer": "openai", "model": "gpt-4o-mini"})
-    raw = renderer.render("prompt", {"renderer": "openai", "model": "gpt-4o-mini"})
+    renderer = get_renderer({"renderer": "openai", "model": "gpt-5-mini"})
+    raw = renderer.render("prompt", {"renderer": "openai", "model": "gpt-5-mini"})
 
     assert isinstance(renderer, APIRenderer)
     assert raw == '[{"role":"user","content":"hi"}]'
@@ -58,7 +58,7 @@ def test_openrouter_renderer_uses_openrouter_defaults(
     renderer = get_renderer(
         {
             "renderer": "openrouter",
-            "model": "openai/gpt-4o-mini",
+            "model": "openai/gpt-5-mini",
             "http_referer": "http://localhost",
             "app_title": "fc-csat",
         }
@@ -67,7 +67,7 @@ def test_openrouter_renderer_uses_openrouter_defaults(
         "prompt",
         {
             "renderer": "openrouter",
-            "model": "openai/gpt-4o-mini",
+            "model": "openai/gpt-5-mini",
             "http_referer": "http://localhost",
             "app_title": "fc-csat",
         },

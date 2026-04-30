@@ -47,14 +47,18 @@ class APIRenderer(DialogueRenderer):
         if not api_key:
             raise RendererError(f"Missing API key. Set {api_key_env} or config.api_key.")
 
+        token_limit_param = config.get("token_limit_param", "max_tokens")
         payload = {
             "model": config["model"],
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": config.get("temperature", 0.7),
-            "max_tokens": config.get("max_tokens", 1200),
         }
-        if "seed" in config:
-            payload["seed"] = config["seed"]
+        if config.get("max_tokens") is not None:
+            payload[token_limit_param] = config.get("max_tokens", 1200)
+        if config.get("send_temperature", True):
+            payload["temperature"] = config.get("temperature", 0.7)
+        if config.get("reasoning_effort"):
+            payload["reasoning_effort"] = config["reasoning_effort"]
+        payload.update(config.get("extra_payload", {}))
         if config.get("response_format_json"):
             payload["response_format"] = {"type": "json_object"}
 
