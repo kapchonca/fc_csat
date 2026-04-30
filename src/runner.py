@@ -31,6 +31,11 @@ def main() -> None:
         default=str(DEFAULT_OUTPUT_DIR),
         help="Directory where generated files will be written.",
     )
+    parser.add_argument(
+        "--generation-config",
+        default=None,
+        help="Optional path to a generation config JSON file.",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
     generate_parser = subparsers.add_parser(
@@ -76,10 +81,15 @@ def _add_common_subcommand_options(parser: argparse.ArgumentParser) -> None:
         default=argparse.SUPPRESS,
         help="Directory where generated files will be written.",
     )
+    parser.add_argument(
+        "--generation-config",
+        default=argparse.SUPPRESS,
+        help="Optional path to a generation config JSON file.",
+    )
 
 
 def command_generate_case_specs(args: argparse.Namespace) -> None:
-    configs = load_configs(args.config_dir)
+    configs = load_configs(args.config_dir, args.generation_config)
     output_dir = Path(args.output_dir)
     specs = generate_case_specs(
         configs["tool_catalog"],
@@ -92,7 +102,7 @@ def command_generate_case_specs(args: argparse.Namespace) -> None:
 
 
 def command_render_dialogues(args: argparse.Namespace) -> None:
-    configs = load_configs(args.config_dir)
+    configs = load_configs(args.config_dir, args.generation_config)
     output_dir = Path(args.output_dir)
     case_specs_path = Path(args.case_specs) if args.case_specs else output_dir / "case_specs.json"
     case_specs = read_json(case_specs_path)
@@ -100,7 +110,7 @@ def command_render_dialogues(args: argparse.Namespace) -> None:
 
 
 def command_run_all(args: argparse.Namespace) -> None:
-    configs = load_configs(args.config_dir)
+    configs = load_configs(args.config_dir, args.generation_config)
     output_dir = Path(args.output_dir)
     case_specs = generate_case_specs(
         configs["tool_catalog"],

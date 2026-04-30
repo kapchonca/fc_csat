@@ -28,10 +28,17 @@ def read_json(path: str | Path) -> Any:
         raise ConfigError(f"Invalid JSON in {config_path}: {exc}") from exc
 
 
-def load_configs(config_dir: str | Path = "configs") -> dict[str, Any]:
+def load_configs(
+    config_dir: str | Path = "configs",
+    generation_config_path: str | Path | None = None,
+) -> dict[str, Any]:
     root = Path(config_dir)
     configs = {
-        key: read_json(root / filename)
+        key: read_json(
+            Path(generation_config_path)
+            if key == "generation_config" and generation_config_path is not None
+            else root / filename
+        )
         for key, filename in REQUIRED_CONFIG_FILES.items()
     }
 

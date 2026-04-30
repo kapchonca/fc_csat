@@ -1,0 +1,83 @@
+{
+  "include_cases": [
+    "cancel_payment_correct",
+    "cancel_payment_skip_step_check_payment_status",
+    "cancel_payment_wrong_order_verify_identity_find_payment",
+    "cancel_payment_wrong_tool_find_payment",
+    "cancel_payment_wrong_parameter_recovered_find_payment",
+    "cancel_payment_wrong_parameter_not_recovered_find_payment",
+    "cancel_payment_tool_failure_recovered_check_payment_status",
+    "cancel_payment_tool_failure_not_recovered_check_payment_status"
+  ],
+  "variants_per_case": 5,
+  "renderer": "openai",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "temperature": 0.7,
+  "max_tokens": 1200,
+  "seed": 42,
+  "api_key_env": "OPENAI_API_KEY",
+  "output_message_min": 4,
+  "output_message_max": 10,
+  "validation": {
+    "success_terms": [
+      "cancelled",
+      "cancellation is confirmed",
+      "completed",
+      "done",
+      "successful",
+      "confirmed"
+    ],
+    "failure_terms": [
+      "unable",
+      "cannot",
+      "can't",
+      "couldn't",
+      "failed",
+      "needs to be escalated",
+      "need to escalate",
+      "not completed"
+    ],
+    "internal_forbidden_tokens": [
+      "case_id",
+      "trace",
+      "tool",
+      "condition",
+      "wrong_parameter",
+      "missing_input",
+      "tool_failure",
+      "skip_step",
+      "wrong_order",
+      "wrong_tool",
+      "recovered",
+      "not_recovered",
+      "task_completed",
+      "task_failed"
+    ],
+    "human_condition_labels": [
+      "case id",
+      "hidden trace",
+      "wrong parameter",
+      "missing input",
+      "tool failure",
+      "skip step",
+      "wrong order",
+      "wrong tool",
+      "not recovered",
+      "task completed",
+      "task failed"
+    ],
+    "condition_indicators": {
+      "correct": [],
+      "skip_step": ["without checking", "missed"],
+      "extra_step": ["recent transactions", "first"],
+      "wrong_order": ["before confirming", "backwards"],
+      "wrong_tool": ["recent transactions", "instead of"],
+      "wrong_parameter_recovered": ["using only the amount", "corrected"],
+      "wrong_parameter_not_recovered": ["only the amount", "not resolved"],
+      "tool_failure_recovered": ["temporary system issue", "retried"],
+      "tool_failure_not_recovered": ["temporary system issue", "unable"]
+    },
+    "forbid_tool_names": true
+  }
+}

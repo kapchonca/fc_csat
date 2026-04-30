@@ -40,8 +40,9 @@ class APIRenderer(DialogueRenderer):
     """Provider-agnostic HTTP renderer for OpenAI-compatible chat endpoints."""
 
     def render(self, prompt: str, config: dict[str, Any]) -> str:
-        endpoint = _api_endpoint(config)
-        api_key_env = config.get("api_key_env", "DIALOGUE_API_KEY")
+        provider = _provider(config)
+        endpoint = _api_endpoint(config, provider)
+        api_key_env = _api_key_env(config, provider)
         api_key = config.get("api_key") or os.environ.get(api_key_env)
         if not api_key:
             raise RendererError(f"Missing API key. Set {api_key_env} or config.api_key.")
@@ -54,15 +55,14 @@ class APIRenderer(DialogueRenderer):
         }
         if "seed" in config:
             payload["seed"] = config["seed"]
+        if config.get("response_format_json"):
+            payload["response_format"] = {"type": "json_object"}
 
         body = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
             endpoint,
             data=body,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=_api_headers(config, provider, api_key),
             method="POST",
         )
         try:
@@ -82,14 +82,49 @@ def get_renderer(config: dict[str, Any]) -> DialogueRenderer:
     renderer_name = config.get("renderer", "mock")
     if renderer_name == "mock":
         return MockRenderer()
-    if renderer_name == "api":
+    if renderer_name in {"api", "openai", "openrouter"}:
         return APIRenderer()
     raise RendererError(f"Unsupported renderer: {renderer_name}")
 
 
-def _api_endpoint(config: dict[str, Any]) -> str:
+def _provider(config: dict[str, Any]) -> str:
+    renderer_name = config.get("renderer", "mock")
+    provider = config.get("provider")
+    if renderer_name in {"openai", "openrouter"}:
+        provider = renderer_name
+    if not provider:
+        provider = "openai"
+    if provider not in {"openai", "openrouter", "custom"}:
+        raise RendererError(f"Unsupported provider: {provider}")
+    return provider
+
+
+def _api_key_env(config: dict[str, Any], provider: str) -> str:
+    if config.get("api_key_env"):
+        return config["api_key_env"]
+    if provider == "openrouter":
+        return "OPENROUTER_API_KEY"
+    return "OPENAI_API_KEY"
+
+
+def _api_endpoint(config: dict[str, Any], provider: str) -> str:
     if config.get("api_endpoint"):
         return config["api_endpoint"]
+
+    if provider == "openai":
+        base_url = config.get("api_base_url") or os.environ.get(
+            config.get("api_base_url_env", "OPENAI_BASE_URL")
+        )
+        return (base_url or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
+
+    if provider == "openrouter":
+        base_url = config.get("api_base_url") or os.environ.get(
+            config.get("api_base_url_env", "OPENROUTER_BASE_URL")
+        )
+        return (
+            base_url or "https://openrouter.ai/api/v1"
+        ).rstrip("/") + "/chat/completions"
+
     base_url_env = config.get("api_base_url_env", "DIALOGUE_API_BASE_URL")
     base_url = config.get("api_base_url") or os.environ.get(base_url_env)
     if not base_url:
@@ -98,6 +133,20 @@ def _api_endpoint(config: dict[str, Any]) -> str:
             "or config.api_endpoint."
         )
     return base_url.rstrip("/") + "/chat/completions"
+
+
+def _api_headers(config: dict[str, Any], provider: str, api_key: str) -> dict[str, str]:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    if provider == "openrouter":
+        if config.get("http_referer"):
+            headers["HTTP-Referer"] = config["http_referer"]
+        if config.get("app_title"):
+            headers["X-Title"] = config["app_title"]
+    headers.update(config.get("extra_headers", {}))
+    return headers
 
 
 def _extract_metadata(prompt: str, label: str) -> str:
