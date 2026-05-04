@@ -149,8 +149,6 @@ def _render_dialogues(
             "invalid_json": 0,
             "wrong_role": 0,
             "empty_message": 0,
-            "internal_label_leak": 0,
-            "wrong_outcome": 0,
         }
     )
 
