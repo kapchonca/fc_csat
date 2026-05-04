@@ -212,38 +212,12 @@ def _mock_messages(
             _assistant("You're right. I am unable to complete the cancellation because the specific payment was not identified."),
         ]
 
-    if condition == "wrong_parameter_recovered":
-        return [
-            _user(f"Please cancel my pending payment for {amount}."),
-            _assistant("I searched using only the amount, but that matched more than one pending payment. Can you confirm the merchant and account ending?"),
-            _user(f"It was to {merchant}, account ending {account}."),
-            _assistant("Thanks. I corrected the details, found the right pending payment, and checked that it can still be cancelled."),
-            _user("Please go ahead."),
-            _assistant("Done. The cancellation is confirmed."),
-        ]
-
-    if condition == "wrong_parameter_not_recovered":
+    if condition == "wrong_parameter":
         return [
             _user(f"Cancel my pending payment for {amount}."),
             _assistant("I searched with only the amount and did not narrow it down to a specific pending payment."),
             _user(f"The merchant was {merchant}."),
             _assistant("I am unable to complete the cancellation because the payment details were not resolved."),
-        ]
-
-    if condition == "tool_failure_recovered":
-        return [
-            _user(f"Please cancel the pending payment for {amount} to {merchant}."),
-            _assistant("Please confirm your account ending and security code."),
-            _user(f"Ending {account}, code 481926."),
-            _assistant("A temporary system issue interrupted the status check, so I retried it. The payment was still pending, and the cancellation is confirmed."),
-        ]
-
-    if condition == "tool_failure_not_recovered":
-        return [
-            _user(f"I need to cancel a pending payment for {amount} to {merchant}."),
-            _assistant("Please confirm your account ending and security code."),
-            _user(f"Account {account}, code 481926."),
-            _assistant("A temporary system issue interrupted the status check, and I am unable to complete the cancellation right now."),
         ]
 
     raise RendererError(f"Mock renderer does not support condition: {condition}")

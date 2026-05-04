@@ -112,7 +112,7 @@ def command_render_dialogues(args: argparse.Namespace) -> None:
     output_dir = Path(args.output_dir)
     case_specs_path = Path(args.case_specs) if args.case_specs else output_dir / "case_specs.json"
     case_specs = read_json(case_specs_path)
-    _render_dialogues(configs, case_specs, output_dir, args.limit_dialogues)
+    _render_dialogues(configs, case_specs, output_dir, getattr(args, "limit_dialogues", None))
 
 
 def command_run_all(args: argparse.Namespace) -> None:
@@ -124,7 +124,7 @@ def command_run_all(args: argparse.Namespace) -> None:
         configs["case_templates"],
     )
     save_case_specs(case_specs, output_dir / "case_specs.json")
-    _render_dialogues(configs, case_specs, output_dir, args.limit_dialogues)
+    _render_dialogues(configs, case_specs, output_dir, getattr(args, "limit_dialogues", None))
 
 
 def _render_dialogues(

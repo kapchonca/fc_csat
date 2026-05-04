@@ -22,20 +22,9 @@ CONDITION_RENDERING_INSTRUCTIONS = {
         "The assistant performs a related but incorrect action, such as showing "
         "recent transactions instead of identifying the specific pending payment."
     ),
-    "wrong_parameter_recovered": (
-        "The assistant initially uses insufficient or incorrect details, then asks "
-        "for clarification or corrects course. The request succeeds."
-    ),
-    "wrong_parameter_not_recovered": (
+    "wrong_parameter": (
         "The assistant uses insufficient or incorrect details and does not properly "
         "correct course. The request fails."
-    ),
-    "tool_failure_recovered": (
-        "The assistant encounters a temporary system issue, retries or resolves it, "
-        "and the request succeeds."
-    ),
-    "tool_failure_not_recovered": (
-        "The assistant encounters a system issue and fails to complete the request."
     ),
 }
 
@@ -80,7 +69,7 @@ def build_prompt(
             "",
             "Forbidden behavior:",
             "- Do not mention internal tool ids, trace, case id, condition names, labels, or error labels.",
-            "- Do not use words such as trace, tool, condition, wrong_parameter, missing_input, tool_failure, skip_step, wrong_order, wrong_tool, recovered, not_recovered, task_completed, or task_failed.",
+            "- Do not use words such as trace, tool, condition, wrong_parameter, missing_input, skip_step, wrong_order, wrong_tool, task_completed, or task_failed.",
             f"- Do not mention exact action ids: {forbidden_tool_ids}.",
             "- Do not add markdown, comments, explanations, headings, or text outside the JSON.",
             "",

@@ -88,17 +88,6 @@ def validate_case_specs(
                     f"{spec['case_id']} has a wrong_tool replacement not present "
                     "in confusion_edges."
                 )
-        if error and error.get("recovered") is True and error["type"] in {
-            "wrong_parameter",
-            "tool_failure",
-            "missing_input",
-        }:
-            recovery_edge = (f"{error['type']}@{error['at']}", error["at"])
-            if recovery_edge not in graph["recovery_edges"]:
-                raise CaseSpecError(
-                    f"{spec['case_id']} marks recovery without a recovery edge."
-                )
-
 
 def _generate_condition_spec(
     task: str,
@@ -125,7 +114,7 @@ def _generate_condition_spec(
             task=task,
             condition=condition,
             parts=[skipped],
-            error={"type": "skip_step", "at": skipped, "recovered": False},
+            error={"type": "skip_step", "at": skipped},
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_FAILED,
             labels=["skip_step", EXPECTED_OUTCOME_FAILED],
@@ -138,7 +127,7 @@ def _generate_condition_spec(
             task=task,
             condition=condition,
             parts=[extra],
-            error={"type": "extra_step", "at": extra, "recovered": True},
+            error={"type": "extra_step", "at": extra},
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_COMPLETED,
             labels=["extra_step", EXPECTED_OUTCOME_COMPLETED],
@@ -157,7 +146,6 @@ def _generate_condition_spec(
             error={
                 "type": "wrong_order",
                 "at": after,
-                "recovered": False,
                 "required_before": before,
             },
             trace=trace,
@@ -181,87 +169,27 @@ def _generate_condition_spec(
                 "type": "wrong_tool",
                 "at": expected,
                 "replacement": replacement,
-                "recovered": False,
             },
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_FAILED,
             labels=["wrong_tool", EXPECTED_OUTCOME_FAILED],
         )
 
-    if condition == "wrong_parameter_recovered":
+    if condition == "wrong_parameter":
         tool_id = _choose_error_tool(
             "wrong_parameter",
             base_trace,
             tools,
-            graph["recovery_edges"],
-            require_recovery=True,
         )
-        trace = _insert_recovered_error(base_trace, "wrong_parameter", tool_id)
+        trace = _insert_terminal_error(base_trace, "wrong_parameter", tool_id)
         return _spec(
             task=task,
             condition=condition,
             parts=[tool_id],
-            error={"type": "wrong_parameter", "at": tool_id, "recovered": True},
-            trace=trace,
-            expected_outcome=EXPECTED_OUTCOME_COMPLETED,
-            labels=["wrong_parameter", "recovered", EXPECTED_OUTCOME_COMPLETED],
-        )
-
-    if condition == "wrong_parameter_not_recovered":
-        tool_id = _choose_error_tool(
-            "wrong_parameter",
-            base_trace,
-            tools,
-            graph["recovery_edges"],
-            require_recovery=False,
-        )
-        trace = _insert_unrecovered_error(base_trace, "wrong_parameter", tool_id)
-        return _spec(
-            task=task,
-            condition=condition,
-            parts=[tool_id],
-            error={"type": "wrong_parameter", "at": tool_id, "recovered": False},
+            error={"type": "wrong_parameter", "at": tool_id},
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_FAILED,
-            labels=["wrong_parameter", "not_recovered", EXPECTED_OUTCOME_FAILED],
-        )
-
-    if condition == "tool_failure_recovered":
-        tool_id = _choose_error_tool(
-            "tool_failure",
-            base_trace,
-            tools,
-            graph["recovery_edges"],
-            require_recovery=True,
-        )
-        trace = _insert_recovered_error(base_trace, "tool_failure", tool_id)
-        return _spec(
-            task=task,
-            condition=condition,
-            parts=[tool_id],
-            error={"type": "tool_failure", "at": tool_id, "recovered": True},
-            trace=trace,
-            expected_outcome=EXPECTED_OUTCOME_COMPLETED,
-            labels=["tool_failure", "recovered", EXPECTED_OUTCOME_COMPLETED],
-        )
-
-    if condition == "tool_failure_not_recovered":
-        tool_id = _choose_error_tool(
-            "tool_failure",
-            base_trace,
-            tools,
-            graph["recovery_edges"],
-            require_recovery=False,
-        )
-        trace = _insert_unrecovered_error(base_trace, "tool_failure", tool_id)
-        return _spec(
-            task=task,
-            condition=condition,
-            parts=[tool_id],
-            error={"type": "tool_failure", "at": tool_id, "recovered": False},
-            trace=trace,
-            expected_outcome=EXPECTED_OUTCOME_FAILED,
-            labels=["tool_failure", "not_recovered", EXPECTED_OUTCOME_FAILED],
+            labels=["wrong_parameter", EXPECTED_OUTCOME_FAILED],
         )
 
     raise CaseSpecError(f"Unsupported condition: {condition}")
@@ -339,35 +267,17 @@ def _choose_error_tool(
     error_type: str,
     base_trace: list[str],
     tools: dict[str, dict[str, Any]],
-    recovery_edges: set[tuple[str, str]],
-    require_recovery: bool,
 ) -> str:
     for action in base_trace:
         if action == "done" or action not in tools:
             continue
         if error_type not in tools[action]["errors"]:
             continue
-        recovery_edge = (f"{error_type}@{action}", action)
-        if require_recovery and recovery_edge not in recovery_edges:
-            continue
         return action
     raise CaseSpecError(f"No tool in base trace supports {error_type}.")
 
 
-def _insert_recovered_error(
-    base_trace: list[str],
-    error_type: str,
-    tool_id: str,
-) -> list[str]:
-    trace: list[str] = []
-    for action in base_trace:
-        if action == tool_id:
-            trace.append(f"{error_type}@{tool_id}")
-        trace.append(action)
-    return trace
-
-
-def _insert_unrecovered_error(
+def _insert_terminal_error(
     base_trace: list[str],
     error_type: str,
     tool_id: str,

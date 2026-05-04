@@ -17,10 +17,10 @@ def _case(case_id: str):
 
 
 def test_validator_rejects_internal_label_leaks() -> None:
-    configs, spec = _case("cancel_payment_wrong_parameter_recovered_find_payment")
+    configs, spec = _case("cancel_payment_wrong_parameter_find_payment")
     messages = [
         {"role": "user", "content": "Please help cancel this payment."},
-        {"role": "assistant", "content": "This is a wrong_parameter recovered case. Done."},
+        {"role": "assistant", "content": "This is a wrong_parameter case. Done."},
     ]
     result = validate_dialogue(
         spec,

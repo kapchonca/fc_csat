@@ -64,10 +64,20 @@ def test_wrong_tool_generation_from_confusion_edges() -> None:
     assert spec["error"]["replacement"] == "list_recent_transactions"
 
 
-def test_recovered_error_generation_from_recovery_edges() -> None:
-    configs, specs = _specs()
-    spec = specs["cancel_payment_wrong_parameter_recovered_find_payment"]
-    assert ["wrong_parameter@find_payment", "find_payment"] in configs["action_graph"]["recovery_edges"]
-    marker_index = spec["trace"].index("wrong_parameter@find_payment")
-    assert spec["trace"][marker_index + 1] == "find_payment"
-    assert spec["expected_outcome"] == "task_completed"
+def test_removed_scenarios_are_not_generated() -> None:
+    _, specs = _specs()
+    assert all("recovered" not in case_id for case_id in specs)
+    assert all("not_recovered" not in case_id for case_id in specs)
+    assert all("tool_failure" not in case_id for case_id in specs)
+
+
+def test_wrong_parameter_generation() -> None:
+    _, specs = _specs()
+    spec = specs["cancel_payment_wrong_parameter_find_payment"]
+    assert spec["trace"] == [
+        "verify_identity",
+        "wrong_parameter@find_payment",
+        "done",
+    ]
+    assert spec["expected_outcome"] == "task_failed"
+    assert spec["labels"] == ["wrong_parameter", "task_failed"]
