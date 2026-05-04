@@ -121,13 +121,17 @@ def _generate_condition_spec(
         )
 
     if condition == "extra_step":
-        extra = _choose_extra_action(base_trace, tools, graph["nodes"])
-        trace = [base_trace[0], extra, *base_trace[1:]]
+        anchor, extra = _choose_extra_action(
+            base_trace,
+            tools,
+            graph["extra_step_candidates"],
+        )
+        trace = _insert_after(base_trace, anchor, extra)
         return _spec(
             task=task,
             condition=condition,
             parts=[extra],
-            error={"type": "extra_step", "at": extra},
+            error={"type": "extra_step", "at": extra, "anchor": anchor},
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_COMPLETED,
             labels=["extra_step", EXPECTED_OUTCOME_COMPLETED],
@@ -232,12 +236,28 @@ def _choose_skip_action(
 def _choose_extra_action(
     base_trace: list[str],
     tools: dict[str, dict[str, Any]],
-    graph_nodes: list[str],
-) -> str:
-    for node in graph_nodes:
-        if node != "done" and node not in base_trace and node in tools:
-            return node
-    raise CaseSpecError("extra_step requires an unused graph node with a catalog entry.")
+    extra_step_candidates: list[tuple[str, str]],
+) -> tuple[str, str]:
+    for anchor in base_trace:
+        for candidate_anchor, extra in extra_step_candidates:
+            if candidate_anchor == anchor and extra not in base_trace and extra in tools:
+                return anchor, extra
+    raise CaseSpecError(
+        "extra_step requires an extra_step_candidates edge anchored in the base trace."
+    )
+
+
+def _insert_after(base_trace: list[str], anchor: str, action: str) -> list[str]:
+    trace: list[str] = []
+    inserted = False
+    for item in base_trace:
+        trace.append(item)
+        if item == anchor and not inserted:
+            trace.append(action)
+            inserted = True
+    if not inserted:
+        raise CaseSpecError(f"Cannot insert {action!r}; anchor {anchor!r} is absent.")
+    return trace
 
 
 def _choose_hard_precondition(
@@ -336,6 +356,9 @@ def _normalise_graph(action_graph: dict[str, Any]) -> dict[str, Any]:
         ),
         "recovery_edges": _edge_list(action_graph.get("recovery_edges", [])),
         "confusion_edges": _edge_list(action_graph.get("confusion_edges", [])),
+        "extra_step_candidates": _edge_list(
+            action_graph.get("extra_step_candidates", [])
+        ),
     }
 
 

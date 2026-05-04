@@ -11,7 +11,7 @@ class ConfigError(ValueError):
 
 REQUIRED_CONFIG_FILES = {
     "tool_catalog": "tool_catalog.json",
-    "action_graph": "action_graph.json",
+    "action_graph": "action_graph_product_support.json",
     "case_templates": "case_templates.json",
     "generation_config": "generation_config.json",
 }
@@ -89,6 +89,7 @@ def validate_action_graph(action_graph: Any) -> None:
         "hard_precondition_edges",
         "recovery_edges",
         "confusion_edges",
+        "extra_step_candidates",
     ):
         edges = action_graph.get(key, [])
         if not isinstance(edges, list):

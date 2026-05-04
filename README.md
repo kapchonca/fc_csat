@@ -27,8 +27,28 @@ The OpenAI config defaults to:
 - `renderer`: `openai`
 - endpoint: `https://api.openai.com/v1/chat/completions`
 - key env var: `OPENAI_API_KEY`
+- model: `gpt-5-mini`
+- output limit field: `max_completion_tokens`
+- reasoning field: `reasoning_effort`
 
 You can override the endpoint with `api_endpoint` or `api_base_url`.
+
+For a small smoke test, cap the number of API calls:
+
+```bash
+python3 -m src.runner run-all \
+  --generation-config configs/generation_config.openai.example.json \
+  --output-dir outputs_openai_smoke \
+  --limit-dialogues 2
+```
+
+For a full debug pass with one variant per included case:
+
+```bash
+python3 -m src.runner run-all \
+  --generation-config configs/generation_config.openai.debug.json \
+  --output-dir outputs_openai_debug
+```
 
 ## OpenRouter Run
 
@@ -44,7 +64,27 @@ The OpenRouter config defaults to:
 - `renderer`: `openrouter`
 - endpoint: `https://openrouter.ai/api/v1/chat/completions`
 - key env var: `OPENROUTER_API_KEY`
+- model: `openai/gpt-5-mini`
+- output limit field: `max_completion_tokens`
+- reasoning field: `extra_payload.reasoning`
 - optional attribution headers: `http_referer`, `app_title`
+
+For a small smoke test:
+
+```bash
+python3 -m src.runner run-all \
+  --generation-config configs/generation_config.openrouter.example.json \
+  --output-dir outputs_openrouter_smoke \
+  --limit-dialogues 2
+```
+
+For a full debug pass with one variant per included case:
+
+```bash
+python3 -m src.runner run-all \
+  --generation-config configs/generation_config.openrouter.debug.json \
+  --output-dir outputs_openrouter_debug
+```
 
 ## Outputs
 
