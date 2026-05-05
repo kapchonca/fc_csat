@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -149,9 +150,9 @@ def _render_dialogues(
     output_dir.mkdir(parents=True, exist_ok=True)
     generation_config = configs["generation_config"]
     selected_specs = _select_case_specs(case_specs, generation_config.get("include_cases", []))
-    renderer = get_renderer(generation_config)
     variants_per_case = generation_config["variants_per_case"]
     semantic_variants = _semantic_variants(generation_config)
+    max_parallel_requests = _max_parallel_requests(generation_config)
 
     dialogues: list[dict[str, Any]] = []
     debug_records: list[dict[str, Any]] = []
@@ -168,165 +169,41 @@ def _render_dialogues(
         }
     )
 
-    attempted = 0
-    stop = False
-    for case_spec in selected_specs:
-        for semantic_variant in semantic_variants:
-            for variant_id in range(1, variants_per_case + 1):
-                if limit_dialogues is not None and attempted >= limit_dialogues:
-                    stop = True
-                    break
-                attempted += 1
-                render_config = dict(generation_config)
-                render_config["variant_id"] = variant_id
-                render_config["case_id"] = case_spec["case_id"]
-                render_config["semantic_variant"] = semantic_variant
-                plan_prompt = None
-                raw_plan_output = None
-                plan_parse_errors: list[str] = []
-                parsed_plan = None
-                dialogue_plan = None
-                plan_validation = None
-                plan_usage = None
-                plan_cost = None
-                dialogue_usage = None
-                dialogue_cost = None
+    tasks = _build_render_tasks(
+        selected_specs=selected_specs,
+        semantic_variants=semantic_variants,
+        variants_per_case=variants_per_case,
+        limit_dialogues=limit_dialogues,
+    )
+    results: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=max_parallel_requests) as executor:
+        futures = [
+            executor.submit(_render_dialogue_task, configs, task)
+            for task in tasks
+        ]
+        for future in as_completed(futures):
+            results.append(future.result())
 
-                if _dialogue_plan_enabled(generation_config):
-                    plan_config = dict(render_config)
-                    plan_config["render_stage"] = "plan"
-                    plan_prompt = build_dialogue_plan_prompt(
-                        case_spec,
-                        configs["tool_catalog"],
-                        plan_config,
-                    )
-                    raw_plan_output = renderer.render(plan_prompt, plan_config)
-                    plan_usage, plan_cost = _record_render_usage(
-                        usage_summary,
-                        renderer,
-                        generation_config,
-                        stage="plan",
-                    )
-                    plan_parse_result = parse_dialogue_plan(raw_plan_output)
-                    plan_parse_errors = plan_parse_result.errors
-                    parsed_plan = plan_parse_result.items
-                    plan_validation = validate_dialogue_plan(
-                        case_spec=case_spec,
-                        plan=parsed_plan,
-                        generation_config=generation_config,
-                        tool_catalog=configs["tool_catalog"],
-                        variant_id=variant_id,
-                        parse_errors=plan_parse_result.errors,
-                    )
-                    if plan_validation.status == "passed":
-                        dialogue_plan = parsed_plan
-                        render_config["render_stage"] = "dialogue"
-                        prompt = build_dialogue_prompt(
-                            case_spec,
-                            configs["tool_catalog"],
-                            render_config,
-                            dialogue_plan=dialogue_plan,
-                        )
-                        raw_output = renderer.render(prompt, render_config)
-                        dialogue_usage, dialogue_cost = _record_render_usage(
-                            usage_summary,
-                            renderer,
-                            generation_config,
-                            stage="dialogue",
-                        )
-                        parse_result = parse_dialogue(raw_output)
-                        validation = validate_dialogue(
-                            case_spec=case_spec,
-                            messages=parse_result.messages,
-                            generation_config=generation_config,
-                            tool_catalog=configs["tool_catalog"],
-                            variant_id=variant_id,
-                            parse_errors=parse_result.errors,
-                            dialogue_plan=dialogue_plan,
-                        )
-                    else:
-                        prompt = None
-                        raw_output = None
-                        parse_result = None
-                        validation = plan_validation
-                else:
-                    prompt = build_prompt(case_spec, configs["tool_catalog"], render_config)
-                    raw_output = renderer.render(prompt, render_config)
-                    dialogue_usage, dialogue_cost = _record_render_usage(
-                        usage_summary,
-                        renderer,
-                        generation_config,
-                        stage="dialogue",
-                    )
-                    parse_result = parse_dialogue(raw_output)
-                    validation = validate_dialogue(
-                        case_spec=case_spec,
-                        messages=parse_result.messages,
-                        generation_config=generation_config,
-                        tool_catalog=configs["tool_catalog"],
-                        variant_id=variant_id,
-                        parse_errors=parse_result.errors,
-                    )
+    for result in sorted(results, key=lambda item: item["sequence"]):
+        if result["dialogue"] is not None:
+            dialogues.append(result["dialogue"])
+        else:
+            for error in result["validation_errors"]:
+                failure_reasons[error] += 1
+        debug_records.append(result["debug_record"])
+        for usage_record in result["usage_records"]:
+            _add_usage(
+                usage_summary["total"],
+                usage_record["usage"],
+                usage_record["cost"],
+            )
+            _add_usage(
+                usage_summary["by_stage"][usage_record["stage"]],
+                usage_record["usage"],
+                usage_record["cost"],
+            )
 
-                parsed_messages = parse_result.messages if parse_result is not None else None
-                parser_errors = parse_result.errors if parse_result is not None else []
-
-                if validation.status == "passed" and parsed_messages is not None:
-                    dialogues.append(
-                        {
-                            "dialogue_id": _dialogue_id(
-                                case_spec["case_id"],
-                                semantic_variant["id"],
-                                variant_id,
-                            ),
-                            "case_id": case_spec["case_id"],
-                            "task": case_spec["task"],
-                            "condition": case_spec["condition"],
-                            "semantic_variant": semantic_variant["id"],
-                            "variant_id": variant_id,
-                            "expected_outcome": case_spec["expected_outcome"],
-                            "labels": case_spec["labels"],
-                            "messages": parsed_messages,
-                        }
-                    )
-                else:
-                    for error in validation.errors:
-                        failure_reasons[error] += 1
-
-                debug_records.append(
-                    {
-                        "case_id": case_spec["case_id"],
-                        "semantic_variant": semantic_variant["id"],
-                        "variant_id": variant_id,
-                        "plan_prompt": plan_prompt,
-                        "raw_plan_output": raw_plan_output,
-                        "plan_usage": plan_usage,
-                        "plan_cost": plan_cost,
-                        "parsed_plan": parsed_plan,
-                        "plan_parser_errors": plan_parse_errors,
-                        "plan_validator_status": plan_validation.status
-                        if plan_validation is not None
-                        else None,
-                        "plan_validator_errors": plan_validation.errors
-                        if plan_validation is not None
-                        else [],
-                        "prompt": prompt,
-                        "raw_output": raw_output,
-                        "dialogue_usage": dialogue_usage,
-                        "dialogue_cost": dialogue_cost,
-                        "parsed_output": parsed_messages,
-                        "parser_errors": parser_errors,
-                        "validator_status": validation.status,
-                        "validator_errors": validation.errors,
-                        "validator_warnings": validation.warnings,
-                    }
-                )
-            if stop:
-                break
-        if stop:
-            break
-
-    generated = attempted
+    generated = len(tasks)
     summary = {
         "dataset_version": configs["case_templates"]["version"],
         "generated": generated,
@@ -337,6 +214,7 @@ def _render_dialogues(
         "temperature": generation_config.get("temperature"),
         "seed": generation_config.get("seed"),
         "semantic_variants": [variant["id"] for variant in semantic_variants],
+        "max_parallel_requests": max_parallel_requests,
         "usage": _finalize_usage_summary(usage_summary),
     }
 
@@ -368,6 +246,184 @@ def _dialogue_plan_enabled(generation_config: dict[str, Any]) -> bool:
     return isinstance(plan_config, dict) and plan_config.get("enabled", False)
 
 
+def _build_render_tasks(
+    selected_specs: list[dict[str, Any]],
+    semantic_variants: list[dict[str, str]],
+    variants_per_case: int,
+    limit_dialogues: int | None,
+) -> list[dict[str, Any]]:
+    tasks: list[dict[str, Any]] = []
+    sequence = 0
+    for case_spec in selected_specs:
+        for semantic_variant in semantic_variants:
+            for variant_id in range(1, variants_per_case + 1):
+                if limit_dialogues is not None and len(tasks) >= limit_dialogues:
+                    return tasks
+                tasks.append(
+                    {
+                        "sequence": sequence,
+                        "case_spec": case_spec,
+                        "semantic_variant": semantic_variant,
+                        "variant_id": variant_id,
+                    }
+                )
+                sequence += 1
+    return tasks
+
+
+def _render_dialogue_task(
+    configs: dict[str, Any],
+    task: dict[str, Any],
+) -> dict[str, Any]:
+    generation_config = configs["generation_config"]
+    case_spec = task["case_spec"]
+    semantic_variant = task["semantic_variant"]
+    variant_id = task["variant_id"]
+    renderer = get_renderer(generation_config)
+    render_config = dict(generation_config)
+    render_config["variant_id"] = variant_id
+    render_config["case_id"] = case_spec["case_id"]
+    render_config["semantic_variant"] = semantic_variant
+
+    plan_prompt = None
+    raw_plan_output = None
+    plan_parse_errors: list[str] = []
+    parsed_plan = None
+    dialogue_plan = None
+    plan_validation = None
+    plan_usage = None
+    plan_cost = None
+    dialogue_usage = None
+    dialogue_cost = None
+    usage_records: list[dict[str, Any]] = []
+
+    if _dialogue_plan_enabled(generation_config):
+        plan_config = dict(render_config)
+        plan_config["render_stage"] = "plan"
+        plan_prompt = build_dialogue_plan_prompt(
+            case_spec,
+            configs["tool_catalog"],
+            plan_config,
+        )
+        raw_plan_output = renderer.render(plan_prompt, plan_config)
+        plan_usage, plan_cost = _capture_render_usage(renderer, generation_config)
+        usage_records.append({"stage": "plan", "usage": plan_usage, "cost": plan_cost})
+        plan_parse_result = parse_dialogue_plan(raw_plan_output)
+        plan_parse_errors = plan_parse_result.errors
+        parsed_plan = plan_parse_result.items
+        plan_validation = validate_dialogue_plan(
+            case_spec=case_spec,
+            plan=parsed_plan,
+            generation_config=generation_config,
+            tool_catalog=configs["tool_catalog"],
+            variant_id=variant_id,
+            parse_errors=plan_parse_result.errors,
+        )
+        if plan_validation.status == "passed":
+            dialogue_plan = parsed_plan
+            render_config["render_stage"] = "dialogue"
+            prompt = build_dialogue_prompt(
+                case_spec,
+                configs["tool_catalog"],
+                render_config,
+                dialogue_plan=dialogue_plan,
+            )
+            raw_output = renderer.render(prompt, render_config)
+            dialogue_usage, dialogue_cost = _capture_render_usage(
+                renderer,
+                generation_config,
+            )
+            usage_records.append(
+                {"stage": "dialogue", "usage": dialogue_usage, "cost": dialogue_cost}
+            )
+            parse_result = parse_dialogue(raw_output)
+            validation = validate_dialogue(
+                case_spec=case_spec,
+                messages=parse_result.messages,
+                generation_config=generation_config,
+                tool_catalog=configs["tool_catalog"],
+                variant_id=variant_id,
+                parse_errors=parse_result.errors,
+                dialogue_plan=dialogue_plan,
+            )
+        else:
+            prompt = None
+            raw_output = None
+            parse_result = None
+            validation = plan_validation
+    else:
+        prompt = build_prompt(case_spec, configs["tool_catalog"], render_config)
+        raw_output = renderer.render(prompt, render_config)
+        dialogue_usage, dialogue_cost = _capture_render_usage(renderer, generation_config)
+        usage_records.append(
+            {"stage": "dialogue", "usage": dialogue_usage, "cost": dialogue_cost}
+        )
+        parse_result = parse_dialogue(raw_output)
+        validation = validate_dialogue(
+            case_spec=case_spec,
+            messages=parse_result.messages,
+            generation_config=generation_config,
+            tool_catalog=configs["tool_catalog"],
+            variant_id=variant_id,
+            parse_errors=parse_result.errors,
+        )
+
+    parsed_messages = parse_result.messages if parse_result is not None else None
+    parser_errors = parse_result.errors if parse_result is not None else []
+    dialogue = None
+    if validation.status == "passed" and parsed_messages is not None:
+        dialogue = {
+            "dialogue_id": _dialogue_id(
+                case_spec["case_id"],
+                semantic_variant["id"],
+                variant_id,
+            ),
+            "case_id": case_spec["case_id"],
+            "task": case_spec["task"],
+            "condition": case_spec["condition"],
+            "semantic_variant": semantic_variant["id"],
+            "variant_id": variant_id,
+            "expected_outcome": case_spec["expected_outcome"],
+            "labels": case_spec["labels"],
+            "messages": parsed_messages,
+        }
+
+    debug_record = {
+        "case_id": case_spec["case_id"],
+        "semantic_variant": semantic_variant["id"],
+        "variant_id": variant_id,
+        "plan_prompt": plan_prompt,
+        "raw_plan_output": raw_plan_output,
+        "plan_usage": plan_usage,
+        "plan_cost": plan_cost,
+        "parsed_plan": parsed_plan,
+        "plan_parser_errors": plan_parse_errors,
+        "plan_validator_status": plan_validation.status
+        if plan_validation is not None
+        else None,
+        "plan_validator_errors": plan_validation.errors
+        if plan_validation is not None
+        else [],
+        "prompt": prompt,
+        "raw_output": raw_output,
+        "dialogue_usage": dialogue_usage,
+        "dialogue_cost": dialogue_cost,
+        "parsed_output": parsed_messages,
+        "parser_errors": parser_errors,
+        "validator_status": validation.status,
+        "validator_errors": validation.errors,
+        "validator_warnings": validation.warnings,
+    }
+
+    return {
+        "sequence": task["sequence"],
+        "dialogue": dialogue,
+        "debug_record": debug_record,
+        "validation_errors": validation.errors,
+        "usage_records": usage_records,
+    }
+
+
 def _semantic_variants(generation_config: dict[str, Any]) -> list[dict[str, str]]:
     variants = generation_config.get("semantic_variants", [])
     if not variants:
@@ -390,6 +446,11 @@ def _dialogue_id(case_id: str, semantic_variant_id: str, variant_id: int) -> str
     if semantic_variant_id == "default":
         return f"{case_id}_v{variant_id:02d}"
     return f"{case_id}__{semantic_variant_id}_v{variant_id:02d}"
+
+
+def _max_parallel_requests(generation_config: dict[str, Any]) -> int:
+    value = generation_config.get("max_parallel_requests", 1)
+    return value if isinstance(value, int) and value > 0 else 1
 
 
 def _timestamped_output_dir(base_dir: Path) -> Path:
@@ -437,6 +498,17 @@ def _record_render_usage(
 
     _add_usage(usage_summary["total"], normalized_usage, cost)
     _add_usage(usage_summary["by_stage"][stage], normalized_usage, cost)
+    return normalized_usage, cost
+
+
+def _capture_render_usage(
+    renderer: Any,
+    generation_config: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    metadata = getattr(renderer, "last_response_metadata", {}) or {}
+    usage = metadata.get("usage", {}) if isinstance(metadata, dict) else {}
+    normalized_usage = _normalize_usage(usage)
+    cost = _calculate_cost(normalized_usage, generation_config)
     return normalized_usage, cost
 
 

@@ -135,6 +135,10 @@ def validate_generation_config(generation_config: Any) -> None:
     if not isinstance(variants, int) or variants < 1:
         raise ConfigError("variants_per_case must be a positive integer.")
 
+    max_parallel_requests = generation_config.get("max_parallel_requests", 1)
+    if not isinstance(max_parallel_requests, int) or max_parallel_requests < 1:
+        raise ConfigError("max_parallel_requests must be a positive integer.")
+
     plan_config = generation_config.get("dialogue_plan")
     if plan_config is not None:
         validate_dialogue_plan_config(plan_config)
