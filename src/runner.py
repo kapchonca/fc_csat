@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -100,7 +101,7 @@ def _add_common_subcommand_options(parser: argparse.ArgumentParser) -> None:
 
 def command_generate_case_specs(args: argparse.Namespace) -> None:
     configs = load_configs(args.config_dir, args.generation_config)
-    output_dir = Path(args.output_dir)
+    output_dir = _timestamped_output_dir(Path(args.output_dir))
     specs = generate_case_specs(
         configs["tool_catalog"],
         configs["action_graph"],
@@ -113,15 +114,20 @@ def command_generate_case_specs(args: argparse.Namespace) -> None:
 
 def command_render_dialogues(args: argparse.Namespace) -> None:
     configs = load_configs(args.config_dir, args.generation_config)
-    output_dir = Path(args.output_dir)
-    case_specs_path = Path(args.case_specs) if args.case_specs else output_dir / "case_specs.json"
+    requested_output_dir = Path(args.output_dir)
+    case_specs_path = (
+        Path(args.case_specs)
+        if args.case_specs
+        else requested_output_dir / "case_specs.json"
+    )
+    output_dir = _timestamped_output_dir(requested_output_dir)
     case_specs = read_json(case_specs_path)
     _render_dialogues(configs, case_specs, output_dir, getattr(args, "limit_dialogues", None))
 
 
 def command_run_all(args: argparse.Namespace) -> None:
     configs = load_configs(args.config_dir, args.generation_config)
-    output_dir = Path(args.output_dir)
+    output_dir = _timestamped_output_dir(Path(args.output_dir))
     case_specs = generate_case_specs(
         configs["tool_catalog"],
         configs["action_graph"],
@@ -384,6 +390,11 @@ def _dialogue_id(case_id: str, semantic_variant_id: str, variant_id: int) -> str
     if semantic_variant_id == "default":
         return f"{case_id}_v{variant_id:02d}"
     return f"{case_id}__{semantic_variant_id}_v{variant_id:02d}"
+
+
+def _timestamped_output_dir(base_dir: Path) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    return base_dir / timestamp
 
 
 def _new_usage_summary(generation_config: dict[str, Any]) -> dict[str, Any]:
