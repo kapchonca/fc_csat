@@ -155,6 +155,10 @@ def validate_generation_config(generation_config: Any) -> None:
     if not isinstance(generation_config.get("model"), str):
         raise ConfigError("model must be a string.")
 
+    pricing = generation_config.get("pricing")
+    if pricing is not None:
+        validate_pricing_config(pricing)
+
 
 def validate_dialogue_plan_config(plan_config: Any) -> None:
     if not isinstance(plan_config, dict):
@@ -177,3 +181,20 @@ def validate_dialogue_plan_config(plan_config: Any) -> None:
         raise ConfigError("dialogue_plan.role_pattern must contain user/assistant roles.")
     if len(role_pattern) != message_count:
         raise ConfigError("dialogue_plan.role_pattern length must equal message_count.")
+
+
+def validate_pricing_config(pricing: Any) -> None:
+    if not isinstance(pricing, dict):
+        raise ConfigError("pricing must be an object.")
+    if "currency" in pricing and not isinstance(pricing["currency"], str):
+        raise ConfigError("pricing.currency must be a string.")
+    for key in (
+        "input_per_1m_tokens",
+        "cached_input_per_1m_tokens",
+        "output_per_1m_tokens",
+    ):
+        if key not in pricing:
+            continue
+        value = pricing[key]
+        if not isinstance(value, (int, float)) or value < 0:
+            raise ConfigError(f"pricing.{key} must be a non-negative number.")

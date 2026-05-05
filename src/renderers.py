@@ -15,6 +15,8 @@ class RendererError(RuntimeError):
 
 
 class DialogueRenderer(ABC):
+    last_response_metadata: dict[str, Any]
+
     @abstractmethod
     def render(self, prompt: str, config: dict[str, Any]) -> str:
         """Render a full dialogue in one shot."""
@@ -23,8 +25,16 @@ class DialogueRenderer(ABC):
 class MockRenderer(DialogueRenderer):
     """Deterministic renderer for tests and local reproducible runs."""
 
+    def __init__(self) -> None:
+        self.last_response_metadata: dict[str, Any] = {}
+
     def render(self, prompt: str, config: dict[str, Any]) -> str:
         condition = _extract_metadata(prompt, "Condition")
+        self.last_response_metadata = {
+            "provider": "mock",
+            "model": config.get("model", "mock-renderer"),
+            "usage": _empty_usage(),
+        }
         if config.get("render_stage") == "plan" or "Prompt type: dialogue_plan" in prompt:
             return json.dumps(_mock_plan(condition), ensure_ascii=True)
 
@@ -41,6 +51,9 @@ class MockRenderer(DialogueRenderer):
 
 class APIRenderer(DialogueRenderer):
     """Provider-agnostic HTTP renderer for OpenAI-compatible chat endpoints."""
+
+    def __init__(self) -> None:
+        self.last_response_metadata: dict[str, Any] = {}
 
     def render(self, prompt: str, config: dict[str, Any]) -> str:
         provider = _provider(config)
@@ -80,6 +93,11 @@ class APIRenderer(DialogueRenderer):
 
         try:
             data = json.loads(response_body)
+            self.last_response_metadata = {
+                "provider": provider,
+                "model": data.get("model", config["model"]),
+                "usage": data.get("usage", _empty_usage()),
+            }
             return data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise RendererError("API response did not match expected chat format.") from exc
@@ -154,6 +172,14 @@ def _api_headers(config: dict[str, Any], provider: str, api_key: str) -> dict[st
             headers["X-Title"] = config["app_title"]
     headers.update(config.get("extra_headers", {}))
     return headers
+
+
+def _empty_usage() -> dict[str, int]:
+    return {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+    }
 
 
 def _extract_metadata(prompt: str, label: str) -> str:

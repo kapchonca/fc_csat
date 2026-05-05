@@ -148,6 +148,7 @@ def _render_dialogues(
 
     dialogues: list[dict[str, Any]] = []
     debug_records: list[dict[str, Any]] = []
+    usage_summary = _new_usage_summary(generation_config)
     failure_reasons: Counter[str] = Counter(
         {
             "invalid_json": 0,
@@ -177,6 +178,10 @@ def _render_dialogues(
             parsed_plan = None
             dialogue_plan = None
             plan_validation = None
+            plan_usage = None
+            plan_cost = None
+            dialogue_usage = None
+            dialogue_cost = None
 
             if _dialogue_plan_enabled(generation_config):
                 plan_config = dict(render_config)
@@ -187,6 +192,12 @@ def _render_dialogues(
                     plan_config,
                 )
                 raw_plan_output = renderer.render(plan_prompt, plan_config)
+                plan_usage, plan_cost = _record_render_usage(
+                    usage_summary,
+                    renderer,
+                    generation_config,
+                    stage="plan",
+                )
                 plan_parse_result = parse_dialogue_plan(raw_plan_output)
                 plan_parse_errors = plan_parse_result.errors
                 parsed_plan = plan_parse_result.items
@@ -208,6 +219,12 @@ def _render_dialogues(
                         dialogue_plan=dialogue_plan,
                     )
                     raw_output = renderer.render(prompt, render_config)
+                    dialogue_usage, dialogue_cost = _record_render_usage(
+                        usage_summary,
+                        renderer,
+                        generation_config,
+                        stage="dialogue",
+                    )
                     parse_result = parse_dialogue(raw_output)
                     validation = validate_dialogue(
                         case_spec=case_spec,
@@ -226,6 +243,12 @@ def _render_dialogues(
             else:
                 prompt = build_prompt(case_spec, configs["tool_catalog"], render_config)
                 raw_output = renderer.render(prompt, render_config)
+                dialogue_usage, dialogue_cost = _record_render_usage(
+                    usage_summary,
+                    renderer,
+                    generation_config,
+                    stage="dialogue",
+                )
                 parse_result = parse_dialogue(raw_output)
                 validation = validate_dialogue(
                     case_spec=case_spec,
@@ -262,6 +285,8 @@ def _render_dialogues(
                     "variant_id": variant_id,
                     "plan_prompt": plan_prompt,
                     "raw_plan_output": raw_plan_output,
+                    "plan_usage": plan_usage,
+                    "plan_cost": plan_cost,
                     "parsed_plan": parsed_plan,
                     "plan_parser_errors": plan_parse_errors,
                     "plan_validator_status": plan_validation.status
@@ -272,6 +297,8 @@ def _render_dialogues(
                     else [],
                     "prompt": prompt,
                     "raw_output": raw_output,
+                    "dialogue_usage": dialogue_usage,
+                    "dialogue_cost": dialogue_cost,
                     "parsed_output": parsed_messages,
                     "parser_errors": parser_errors,
                     "validator_status": validation.status,
@@ -292,6 +319,7 @@ def _render_dialogues(
         "model": generation_config["model"],
         "temperature": generation_config.get("temperature"),
         "seed": generation_config.get("seed"),
+        "usage": _finalize_usage_summary(usage_summary),
     }
 
     _write_json(output_dir / "dialogues.json", dialogues)
@@ -320,6 +348,140 @@ def _select_case_specs(
 def _dialogue_plan_enabled(generation_config: dict[str, Any]) -> bool:
     plan_config = generation_config.get("dialogue_plan")
     return isinstance(plan_config, dict) and plan_config.get("enabled", False)
+
+
+def _new_usage_summary(generation_config: dict[str, Any]) -> dict[str, Any]:
+    pricing = generation_config.get("pricing", {})
+    currency = pricing.get("currency", "USD") if isinstance(pricing, dict) else "USD"
+    return {
+        "currency": currency,
+        "pricing": pricing if isinstance(pricing, dict) else {},
+        "total": _empty_usage_bucket(),
+        "by_stage": {
+            "plan": _empty_usage_bucket(),
+            "dialogue": _empty_usage_bucket(),
+        },
+    }
+
+
+def _empty_usage_bucket() -> dict[str, Any]:
+    return {
+        "calls": 0,
+        "prompt_tokens": 0,
+        "cached_prompt_tokens": 0,
+        "billable_prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "cost": 0.0,
+        "provider_reported_cost": 0.0,
+    }
+
+
+def _record_render_usage(
+    usage_summary: dict[str, Any],
+    renderer: Any,
+    generation_config: dict[str, Any],
+    stage: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    metadata = getattr(renderer, "last_response_metadata", {}) or {}
+    usage = metadata.get("usage", {}) if isinstance(metadata, dict) else {}
+    normalized_usage = _normalize_usage(usage)
+    cost = _calculate_cost(normalized_usage, generation_config)
+
+    _add_usage(usage_summary["total"], normalized_usage, cost)
+    _add_usage(usage_summary["by_stage"][stage], normalized_usage, cost)
+    return normalized_usage, cost
+
+
+def _normalize_usage(usage: Any) -> dict[str, Any]:
+    if not isinstance(usage, dict):
+        usage = {}
+    prompt_tokens = _int_usage(usage.get("prompt_tokens"))
+    completion_tokens = _int_usage(usage.get("completion_tokens"))
+    total_tokens = _int_usage(usage.get("total_tokens")) or prompt_tokens + completion_tokens
+    prompt_details = usage.get("prompt_tokens_details", {})
+    cached_prompt_tokens = 0
+    if isinstance(prompt_details, dict):
+        cached_prompt_tokens = _int_usage(prompt_details.get("cached_tokens"))
+    billable_prompt_tokens = max(prompt_tokens - cached_prompt_tokens, 0)
+    provider_reported_cost = usage.get("cost")
+    return {
+        "prompt_tokens": prompt_tokens,
+        "cached_prompt_tokens": cached_prompt_tokens,
+        "billable_prompt_tokens": billable_prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "provider_reported_cost": round(float(provider_reported_cost), 8)
+        if isinstance(provider_reported_cost, (int, float))
+        else None,
+    }
+
+
+def _int_usage(value: Any) -> int:
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def _calculate_cost(
+    usage: dict[str, Any],
+    generation_config: dict[str, Any],
+) -> dict[str, Any]:
+    pricing = generation_config.get("pricing", {})
+    currency = "USD"
+    if not isinstance(pricing, dict):
+        pricing = {}
+    else:
+        currency = pricing.get("currency", "USD")
+
+    input_rate = _float_price(pricing.get("input_per_1m_tokens"))
+    cached_input_rate = _float_price(
+        pricing.get("cached_input_per_1m_tokens"),
+        default=input_rate,
+    )
+    output_rate = _float_price(pricing.get("output_per_1m_tokens"))
+    amount = (
+        usage["billable_prompt_tokens"] * input_rate
+        + usage["cached_prompt_tokens"] * cached_input_rate
+        + usage["completion_tokens"] * output_rate
+    ) / 1_000_000
+    return {
+        "currency": currency,
+        "amount": round(amount, 8),
+        "pricing_available": bool(pricing),
+        "provider_reported_amount": usage["provider_reported_cost"],
+    }
+
+
+def _float_price(value: Any, default: float = 0.0) -> float:
+    if isinstance(value, (int, float)) and value >= 0:
+        return float(value)
+    return default
+
+
+def _add_usage(bucket: dict[str, Any], usage: dict[str, Any], cost: dict[str, Any]) -> None:
+    bucket["calls"] += 1
+    for key in (
+        "prompt_tokens",
+        "cached_prompt_tokens",
+        "billable_prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+    ):
+        bucket[key] += usage[key]
+    bucket["cost"] = round(bucket["cost"] + cost["amount"], 8)
+    if usage["provider_reported_cost"] is not None:
+        bucket["provider_reported_cost"] = round(
+            bucket["provider_reported_cost"] + usage["provider_reported_cost"],
+            8,
+        )
+
+
+def _finalize_usage_summary(usage_summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "currency": usage_summary["currency"],
+        "pricing": usage_summary["pricing"],
+        "total": usage_summary["total"],
+        "by_stage": usage_summary["by_stage"],
+    }
 
 
 def _write_json(path: Path, data: Any) -> None:
