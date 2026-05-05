@@ -152,6 +152,8 @@ def validate_generation_config(generation_config: Any) -> None:
     ):
         raise ConfigError("include_cases must be an array of case ids.")
 
+    validate_semantic_variants(generation_config.get("semantic_variants", []))
+
     if not isinstance(generation_config.get("model"), str):
         raise ConfigError("model must be a string.")
 
@@ -198,3 +200,30 @@ def validate_pricing_config(pricing: Any) -> None:
         value = pricing[key]
         if not isinstance(value, (int, float)) or value < 0:
             raise ConfigError(f"pricing.{key} must be a non-negative number.")
+
+
+def validate_semantic_variants(semantic_variants: Any) -> None:
+    if semantic_variants is None:
+        return
+    if not isinstance(semantic_variants, list):
+        raise ConfigError("semantic_variants must be an array.")
+
+    seen: set[str] = set()
+    for index, variant in enumerate(semantic_variants):
+        if not isinstance(variant, dict):
+            raise ConfigError(f"semantic_variants[{index}] must be an object.")
+        variant_id = variant.get("id")
+        instruction = variant.get("instruction")
+        if not isinstance(variant_id, str) or not variant_id:
+            raise ConfigError(f"semantic_variants[{index}].id must be a non-empty string.")
+        if not variant_id.replace("_", "").replace("-", "").isalnum():
+            raise ConfigError(
+                f"semantic_variants[{index}].id must use letters, digits, hyphens, or underscores."
+            )
+        if variant_id in seen:
+            raise ConfigError(f"Duplicate semantic variant id: {variant_id}")
+        seen.add(variant_id)
+        if not isinstance(instruction, str) or not instruction.strip():
+            raise ConfigError(
+                f"semantic_variants[{index}].instruction must be a non-empty string."
+            )

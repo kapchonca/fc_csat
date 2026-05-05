@@ -30,6 +30,8 @@ class MockRenderer(DialogueRenderer):
 
     def render(self, prompt: str, config: dict[str, Any]) -> str:
         condition = _extract_metadata(prompt, "Condition")
+        semantic_variant = config.get("semantic_variant", {"id": "default"})
+        semantic_variant_id = semantic_variant.get("id", "default")
         self.last_response_metadata = {
             "provider": "mock",
             "model": config.get("model", "mock-renderer"),
@@ -45,7 +47,7 @@ class MockRenderer(DialogueRenderer):
         amount = rng.choice(["$84.20", "$126.45", "$39.99"])
         account = rng.choice(["1842", "3091", "7750"])
 
-        messages = _mock_messages(condition, merchant, amount, account)
+        messages = _mock_messages(condition, merchant, amount, account, semantic_variant_id)
         return json.dumps(messages, ensure_ascii=True)
 
 
@@ -194,9 +196,10 @@ def _mock_messages(
     merchant: str,
     amount: str,
     account: str,
+    semantic_variant_id: str = "default",
 ) -> list[dict[str, str]]:
     if condition == "correct":
-        return [
+        messages = [
             _user(f"Hi, I need help with a payment to {merchant} for {amount}."),
             _assistant("I can help. Please confirm the account ending and the security code I just sent."),
             _user(f"The account ends in {account}, and the code is 481926."),
@@ -206,9 +209,10 @@ def _mock_messages(
             _user("Yes, please do that."),
             _assistant("Done. The inquiry has been created and the payment details are included."),
         ]
+        return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
     if condition == "skip_step":
-        return [
+        messages = [
             _user(f"Please help with a payment to {merchant} for {amount}."),
             _assistant("Please confirm your account ending and the one-time security code."),
             _user(f"Account {account}, code 481926."),
@@ -218,9 +222,10 @@ def _mock_messages(
             _user("That was the part I needed checked."),
             _assistant("I cannot complete this correctly here because that status check was missed."),
         ]
+        return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
     if condition == "extra_step":
-        return [
+        messages = [
             _user(f"I need help with a payment to {merchant} for {amount}."),
             _assistant("I can help. Please confirm your account ending and the security code."),
             _user(f"Ending {account}, code 481926."),
@@ -230,9 +235,10 @@ def _mock_messages(
             _user("Okay, please continue."),
             _assistant("Done. The inquiry has been created with the payment status included."),
         ]
+        return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
     if condition == "wrong_order":
-        return [
+        messages = [
             _user(f"Can you check a payment to {merchant} for {amount} and open an inquiry if needed?"),
             _assistant("I opened the support inquiry first and then started checking the payment status."),
             _user("I asked you to check the status before opening anything. Did that happen?"),
@@ -242,9 +248,10 @@ def _mock_messages(
             _user("So is the request completed properly?"),
             _assistant("No. It is not completed correctly and would need to be reviewed again."),
         ]
+        return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
     if condition == "wrong_tool":
-        return [
+        messages = [
             _user(f"I need help with the status of a payment to {merchant} for {amount}."),
             _assistant("Please confirm your account ending and security code."),
             _user(f"Account ending {account}, code 481926."),
@@ -254,9 +261,10 @@ def _mock_messages(
             _user("Can this be completed now?"),
             _assistant("No. I am unable to complete it because the specific payment status was not checked."),
         ]
+        return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
     if condition == "wrong_parameter":
-        return [
+        messages = [
             _user(f"Please check my payment for {amount}."),
             _assistant("I tried to proceed using only the amount."),
             _user(f"The merchant was {merchant}."),
@@ -266,6 +274,7 @@ def _mock_messages(
             _user("Then is this completed?"),
             _assistant("No. I am unable to complete it because the payment was not properly identified."),
         ]
+        return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
     raise RendererError(f"Mock renderer does not support condition: {condition}")
 
@@ -341,6 +350,45 @@ def _mock_plan(condition: str) -> list[dict[str, str]]:
         raise RendererError(f"Mock renderer does not support condition: {condition}")
 
     return [{"role": role, "purpose": purpose} for role, purpose in purposes]
+
+
+def _apply_mock_semantic_variant(
+    messages: list[dict[str, str]],
+    semantic_variant_id: str,
+) -> list[dict[str, str]]:
+    if semantic_variant_id == "polite_customer":
+        return [
+            {
+                **message,
+                "content": _polite_customer_text(message["content"])
+                if message["role"] == "user"
+                else message["content"],
+            }
+            for message in messages
+        ]
+    if semantic_variant_id == "frustrated_customer":
+        return [
+            {
+                **message,
+                "content": _frustrated_customer_text(message["content"])
+                if message["role"] == "user"
+                else message["content"],
+            }
+            for message in messages
+        ]
+    return messages
+
+
+def _polite_customer_text(content: str) -> str:
+    if content.lower().startswith(("please", "hi")):
+        return content
+    return "Please, " + content[:1].lower() + content[1:]
+
+
+def _frustrated_customer_text(content: str) -> str:
+    if content.endswith("?"):
+        return content[:-1] + "? This is getting frustrating."
+    return content + " This is getting frustrating."
 
 
 def _user(content: str) -> dict[str, str]:

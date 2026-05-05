@@ -104,6 +104,7 @@ def build_dialogue_prompt(
     tools = {tool["id"]: tool for tool in tool_catalog}
     relevant_tools = _relevant_tools(case_spec, tools)
     forbidden_tool_ids = ", ".join(sorted(tool["id"] for tool in relevant_tools))
+    semantic_variant = _semantic_variant(generation_config)
     if dialogue_plan is None:
         message_requirement = (
             f"- Write approximately {generation_config['output_message_min']} to "
@@ -133,6 +134,7 @@ def build_dialogue_prompt(
             f"Hidden action trace: {json.dumps(case_spec['trace'])}",
             f"Error metadata: {json.dumps(case_spec.get('error'))}",
             f"Experimental labels: {json.dumps(case_spec['labels'])}",
+            f"Semantic variant id: {semantic_variant['id']}",
             *plan_lines,
             "",
             "Relevant declarative action labels. These are not real API calls.",
@@ -147,9 +149,12 @@ def build_dialogue_prompt(
             "- Use realistic but fictional banking details such as merchant names, amounts, dates, and account endings.",
             "- Make the expected final outcome clear in the final assistant message.",
             "- The assistant can describe customer-facing checks, delays, or issues in plain language.",
+            "- Preserve the semantic style from the validated plan.",
+            f"- Semantic rendering instruction: {semantic_variant['instruction']}",
             "",
             "Forbidden behavior:",
             "- Do not mention internal tool ids, trace, case id, condition names, labels, or error labels.",
+            "- Do not mention the semantic variant id or say that a style variant is being used.",
             "- Do not use words such as trace, tool, condition, wrong_parameter, missing_input, skip_step, wrong_order, wrong_tool, task_completed, or task_failed.",
             f"- Do not mention exact action ids: {forbidden_tool_ids}.",
             "- Do not add markdown, comments, explanations, headings, or text outside the JSON.",
@@ -250,6 +255,24 @@ def _action_description(
 
 def _dialogue_plan_config(generation_config: dict[str, Any]) -> dict[str, Any]:
     return generation_config["dialogue_plan"]
+
+
+def _semantic_variant(generation_config: dict[str, Any]) -> dict[str, str]:
+    variant = generation_config.get("semantic_variant")
+    if isinstance(variant, dict):
+        return {
+            "id": str(variant.get("id", "default")),
+            "instruction": str(
+                variant.get(
+                    "instruction",
+                    "Use neutral wording without changing the scenario.",
+                )
+            ),
+        }
+    return {
+        "id": "default",
+        "instruction": "Use neutral wording without changing the scenario.",
+    }
 
 
 def _humanize_task(task: str) -> str:
