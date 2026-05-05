@@ -42,9 +42,16 @@ def test_correct_case_generation() -> None:
 def test_skip_step_generation() -> None:
     _, specs = _specs()
     spec = specs["cancel_payment_skip_step_check_payment_status"]
-    assert "check_payment_status" not in spec["trace"]
-    assert spec["trace"] == ["verify_identity", "find_payment", "cancel_payment", "done"]
-    assert spec["expected_outcome"] == "task_failed"
+    assert spec["trace"] == [
+        "verify_identity",
+        "find_payment",
+        "skip_step@check_payment_status",
+        "check_payment_status",
+        "cancel_payment",
+        "done",
+    ]
+    assert spec["expected_outcome"] == "task_completed"
+    assert spec["labels"] == ["skip_step", "recovered", "task_completed"]
 
 
 def test_extra_step_generation_from_extra_step_candidates() -> None:
@@ -91,21 +98,25 @@ def test_wrong_order_generation_from_hard_precondition_edges() -> None:
     spec = specs["cancel_payment_wrong_order_verify_identity_find_payment"]
     assert ["verify_identity", "find_payment"] in configs["action_graph"]["hard_precondition_edges"]
     assert spec["trace"].index("find_payment") < spec["trace"].index("verify_identity")
-    assert spec["expected_outcome"] == "task_failed"
+    assert spec["trace"].count("verify_identity") == 2
+    assert spec["expected_outcome"] == "task_completed"
+    assert spec["labels"] == ["wrong_order", "recovered", "task_completed"]
 
 
 def test_wrong_tool_generation_from_confusion_edges() -> None:
     configs, specs = _specs()
     spec = specs["cancel_payment_wrong_tool_find_payment"]
     assert ["find_payment", "list_recent_transactions"] in configs["action_graph"]["confusion_edges"]
-    assert "find_payment" not in spec["trace"]
+    assert "find_payment" in spec["trace"]
     assert "list_recent_transactions" in spec["trace"]
+    assert spec["trace"].index("list_recent_transactions") < spec["trace"].index("find_payment")
     assert spec["error"]["replacement"] == "list_recent_transactions"
+    assert spec["expected_outcome"] == "task_completed"
+    assert spec["labels"] == ["wrong_tool", "recovered", "task_completed"]
 
 
 def test_removed_scenarios_are_not_generated() -> None:
     _, specs = _specs()
-    assert all("recovered" not in case_id for case_id in specs)
     assert all("not_recovered" not in case_id for case_id in specs)
     assert all("tool_failure" not in case_id for case_id in specs)
 
@@ -116,7 +127,10 @@ def test_wrong_parameter_generation() -> None:
     assert spec["trace"] == [
         "verify_identity",
         "wrong_parameter@find_payment",
+        "find_payment",
+        "check_payment_status",
+        "cancel_payment",
         "done",
     ]
-    assert spec["expected_outcome"] == "task_failed"
-    assert spec["labels"] == ["wrong_parameter", "task_failed"]
+    assert spec["expected_outcome"] == "task_completed"
+    assert spec["labels"] == ["wrong_parameter", "recovered", "task_completed"]

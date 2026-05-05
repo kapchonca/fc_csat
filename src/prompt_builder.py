@@ -8,23 +8,26 @@ CONDITION_RENDERING_INSTRUCTIONS = {
     "correct": "The assistant completes the customer request smoothly and safely.",
     "skip_step": (
         "The assistant moves forward without an expected check. The customer should "
-        "be able to notice that an important check was missed."
+        "be able to notice that an important check was missed. The assistant then "
+        "corrects the omission and completes the request."
     ),
     "extra_step": (
         "The assistant performs one unnecessary additional step before completing "
         "the request."
     ),
     "wrong_order": (
-        "The assistant performs actions in an unsafe or illogical order, such as "
-        "looking up sensitive information before confirming the customer."
+        "The assistant performs actions in an unsafe or illogical order. The customer "
+        "should be able to notice the order problem, after which the assistant corrects "
+        "course and completes the request."
     ),
     "wrong_tool": (
-        "The assistant performs a related but incorrect action, such as showing "
-        "recent transactions instead of identifying the specific pending payment."
+        "The assistant performs a related but incorrect action. The customer should be "
+        "able to notice the mismatch, after which the assistant uses the correct action "
+        "and completes the request."
     ),
     "wrong_parameter": (
-        "The assistant uses insufficient or incorrect details and does not properly "
-        "correct course. The request fails."
+        "The assistant initially uses insufficient or incorrect details. The assistant "
+        "then obtains or applies the correct details and completes the request."
     ),
 }
 
@@ -209,7 +212,8 @@ def _condition_planning_instruction(
         skipped = _action_description(error.get("at"), tools)
         return (
             "Plan an exchange where the assistant moves forward without this expected "
-            f"customer-facing check: {skipped}. The customer should notice the omission."
+            f"customer-facing check: {skipped}. The customer should notice the omission, "
+            "then the assistant should correct the omitted check and complete the request."
         )
     if condition == "extra_step":
         extra = _action_description(error.get("at"), tools)
@@ -224,20 +228,23 @@ def _condition_planning_instruction(
         return (
             "Plan an exchange where the assistant does this too early: "
             f"{performed}. It should have happened only after: {required}. "
-            "The customer should be able to object to the order."
+            "The customer should be able to object to the order, then the assistant "
+            "should correct the sequence and complete the request."
         )
     if condition == "wrong_tool":
         expected = _action_description(error.get("at"), tools)
         replacement = _action_description(error.get("replacement"), tools)
         return (
             "Plan an exchange where the assistant performs a related but incorrect "
-            f"action: {replacement}. The expected action was: {expected}."
+            f"action: {replacement}. The expected action was: {expected}. The assistant "
+            "should then correct course and complete the request."
         )
     if condition == "wrong_parameter":
         action = _action_description(error.get("at"), tools)
         return (
             "Plan an exchange where the assistant tries to proceed with insufficient "
-            f"or incorrect details for this action: {action}. The request should fail."
+            f"or incorrect details for this action: {action}. The assistant should then "
+            "resolve the details and complete the request."
         )
     return CONDITION_RENDERING_INSTRUCTIONS[condition]
 
