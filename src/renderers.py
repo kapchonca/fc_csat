@@ -25,6 +25,9 @@ class MockRenderer(DialogueRenderer):
 
     def render(self, prompt: str, config: dict[str, Any]) -> str:
         condition = _extract_metadata(prompt, "Condition")
+        if config.get("render_stage") == "plan" or "Prompt type: dialogue_plan" in prompt:
+            return json.dumps(_mock_plan(condition), ensure_ascii=True)
+
         seed = int(config.get("seed", 0))
         variant_id = int(config.get("variant_id", 0))
         rng = random.Random(seed + variant_id * 997 + sum(ord(char) for char in condition))
@@ -168,59 +171,150 @@ def _mock_messages(
 ) -> list[dict[str, str]]:
     if condition == "correct":
         return [
-            _user(f"Hi, I need to cancel a pending card payment for {amount} to {merchant}."),
-            _assistant("I can help with that. Please confirm the account ending and the security code I just sent."),
+            _user(f"Hi, I need help with a payment to {merchant} for {amount}."),
+            _assistant("I can help. Please confirm the account ending and the security code I just sent."),
             _user(f"The account ends in {account}, and the code is 481926."),
-            _assistant("Thanks. I confirmed your identity, found the pending payment, checked that it can still be cancelled, and the cancellation is confirmed."),
+            _assistant("Thanks. I confirmed the secure session and checked the payment status."),
+            _user("What did you find?"),
+            _assistant("The payment is still pending, so I can open a support inquiry with the details attached."),
+            _user("Yes, please do that."),
+            _assistant("Done. The inquiry has been created and the payment details are included."),
         ]
 
     if condition == "skip_step":
         return [
-            _user(f"Please cancel my pending payment for {amount} to {merchant}."),
+            _user(f"Please help with a payment to {merchant} for {amount}."),
             _assistant("Please confirm your account ending and the one-time security code."),
             _user(f"Account {account}, code 481926."),
-            _assistant("I found the payment and started the cancellation without checking whether it had already been processed."),
-            _user("Isn't that something you need to check first?"),
-            _assistant("You're right. I am unable to complete this cancellation here because the required status check was missed, so it needs to be escalated."),
+            _assistant("I opened a support inquiry using the details you gave me."),
+            _user("Did you check the payment status first?"),
+            _assistant("No, I moved ahead before confirming the status."),
+            _user("That was the part I needed checked."),
+            _assistant("I cannot complete this correctly here because that status check was missed."),
         ]
 
     if condition == "extra_step":
         return [
-            _user(f"I need to cancel a pending payment to {merchant} for {amount}."),
+            _user(f"I need help with a payment to {merchant} for {amount}."),
             _assistant("I can help. Please confirm your account ending and the security code."),
             _user(f"Ending {account}, code 481926."),
-            _assistant("I reviewed your recent transactions first, then found the pending payment and checked that it was still cancellable."),
-            _user("Okay, please cancel that pending payment."),
-            _assistant("The cancellation is confirmed and the payment will not be sent."),
+            _assistant("I checked the payment status and also reviewed the recent payment list to compare it."),
+            _user("Was that extra review necessary?"),
+            _assistant("It was not necessary, but it did not change the result."),
+            _user("Okay, please continue."),
+            _assistant("Done. The inquiry has been created with the payment status included."),
         ]
 
     if condition == "wrong_order":
         return [
-            _user(f"Can you cancel a pending payment for {amount} to {merchant}?"),
-            _assistant("I tried to look up the payment before confirming your identity, then asked for the security code afterward."),
-            _user("That seems backwards. Did you confirm me first?"),
-            _assistant("No. I cannot complete the cancellation because the secure order was not followed, so this needs to be escalated."),
+            _user(f"Can you check a payment to {merchant} for {amount} and open an inquiry if needed?"),
+            _assistant("I opened the support inquiry first and then started checking the payment status."),
+            _user("I asked you to check the status before opening anything. Did that happen?"),
+            _assistant("No, the inquiry was opened before the status check."),
+            _user("That is not the order I requested."),
+            _assistant("You're right. The order was not handled correctly."),
+            _user("So is the request completed properly?"),
+            _assistant("No. It is not completed correctly and would need to be reviewed again."),
         ]
 
     if condition == "wrong_tool":
         return [
-            _user(f"I want to cancel a pending payment for {amount} to {merchant}."),
+            _user(f"I need help with the status of a payment to {merchant} for {amount}."),
             _assistant("Please confirm your account ending and security code."),
             _user(f"Account ending {account}, code 481926."),
-            _assistant("I pulled up your recent transactions instead of identifying the specific pending payment."),
-            _user("That doesn't cancel the pending payment."),
-            _assistant("You're right. I am unable to complete the cancellation because the specific payment was not identified."),
+            _assistant("I pulled up a broad list of recent payments instead of checking that specific payment."),
+            _user("That does not answer whether this payment needs an inquiry."),
+            _assistant("You're right. I used a related search but not the specific check."),
+            _user("Can this be completed now?"),
+            _assistant("No. I am unable to complete it because the specific payment status was not checked."),
         ]
 
     if condition == "wrong_parameter":
         return [
-            _user(f"Cancel my pending payment for {amount}."),
-            _assistant("I searched with only the amount and did not narrow it down to a specific pending payment."),
+            _user(f"Please check my payment for {amount}."),
+            _assistant("I tried to proceed using only the amount."),
             _user(f"The merchant was {merchant}."),
-            _assistant("I am unable to complete the cancellation because the payment details were not resolved."),
+            _assistant("I still did not narrow it down to the exact payment record."),
+            _user("So can you open the inquiry with the right details?"),
+            _assistant("Not yet. The payment details are not specific enough in this exchange."),
+            _user("Then is this completed?"),
+            _assistant("No. I am unable to complete it because the payment was not properly identified."),
         ]
 
     raise RendererError(f"Mock renderer does not support condition: {condition}")
+
+
+def _mock_plan(condition: str) -> list[dict[str, str]]:
+    if condition == "correct":
+        purposes = [
+            ("user", "The customer asks for help with a payment issue."),
+            ("assistant", "The assistant asks for secure session confirmation."),
+            ("user", "The customer provides the requested confirmation."),
+            ("assistant", "The assistant checks the payment status in the proper order."),
+            ("user", "The customer asks what the assistant found."),
+            ("assistant", "The assistant explains the payment can be handled."),
+            ("user", "The customer confirms they want to continue."),
+            ("assistant", "The assistant says the request is completed."),
+        ]
+    elif condition == "skip_step":
+        purposes = [
+            ("user", "The customer asks for help with a payment issue."),
+            ("assistant", "The assistant asks for secure session confirmation."),
+            ("user", "The customer provides the requested confirmation."),
+            ("assistant", "The assistant moves forward before making an expected status check."),
+            ("user", "The customer asks whether that status check happened first."),
+            ("assistant", "The assistant says it did not happen first."),
+            ("user", "The customer points out that the check was required."),
+            ("assistant", "The assistant says the request is not completed correctly."),
+        ]
+    elif condition == "extra_step":
+        purposes = [
+            ("user", "The customer asks for help with a payment issue."),
+            ("assistant", "The assistant asks for secure session confirmation."),
+            ("user", "The customer provides the requested confirmation."),
+            ("assistant", "The assistant does the needed check and an unnecessary related review."),
+            ("user", "The customer asks whether the extra review was needed."),
+            ("assistant", "The assistant says it was unnecessary but not blocking."),
+            ("user", "The customer asks the assistant to continue."),
+            ("assistant", "The assistant says the request is completed."),
+        ]
+    elif condition == "wrong_order":
+        purposes = [
+            ("user", "The customer asks to check a payment and open an inquiry only if needed."),
+            ("assistant", "The assistant opens the inquiry before checking the payment status."),
+            ("user", "The customer asks whether the status was checked first."),
+            ("assistant", "The assistant says the inquiry was opened first."),
+            ("user", "The customer points out that this was not the requested order."),
+            ("assistant", "The assistant acknowledges the order problem."),
+            ("user", "The customer asks whether the request is completed correctly."),
+            ("assistant", "The assistant says it is not completed correctly."),
+        ]
+    elif condition == "wrong_tool":
+        purposes = [
+            ("user", "The customer asks for help with a specific payment."),
+            ("assistant", "The assistant asks for secure session confirmation."),
+            ("user", "The customer provides the requested confirmation."),
+            ("assistant", "The assistant performs a related broad lookup instead of the specific check."),
+            ("user", "The customer says this does not answer the request."),
+            ("assistant", "The assistant acknowledges that the specific check was not done."),
+            ("user", "The customer asks whether the request can be completed now."),
+            ("assistant", "The assistant says it cannot be completed correctly."),
+        ]
+    elif condition == "wrong_parameter":
+        purposes = [
+            ("user", "The customer asks for help using incomplete payment details."),
+            ("assistant", "The assistant tries to proceed with insufficient details."),
+            ("user", "The customer adds one more detail."),
+            ("assistant", "The assistant still does not identify the exact payment."),
+            ("user", "The customer asks whether the inquiry can be opened correctly."),
+            ("assistant", "The assistant says the details are still not resolved."),
+            ("user", "The customer asks whether the request is completed."),
+            ("assistant", "The assistant says the request is not completed."),
+        ]
+    else:
+        raise RendererError(f"Mock renderer does not support condition: {condition}")
+
+    return [{"role": role, "purpose": purpose} for role, purpose in purposes]
 
 
 def _user(content: str) -> dict[str, str]:

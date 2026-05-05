@@ -22,7 +22,11 @@ def test_validator_does_not_check_internal_label_leaks() -> None:
         {"role": "user", "content": "Please help cancel this payment."},
         {"role": "assistant", "content": "I can check that."},
         {"role": "user", "content": "Thanks."},
-        {"role": "assistant", "content": "This is a wrong_parameter case. Done."},
+        {"role": "assistant", "content": "I looked with incomplete details."},
+        {"role": "user", "content": "The merchant was a bookstore."},
+        {"role": "assistant", "content": "This is a wrong_parameter case."},
+        {"role": "user", "content": "So is this completed?"},
+        {"role": "assistant", "content": "No, it is not completed."},
     ]
     result = validate_dialogue(
         spec,
@@ -56,6 +60,10 @@ def test_validator_does_not_check_outcome_wording() -> None:
         {"role": "user", "content": "Cancel a payment."},
         {"role": "assistant", "content": "I can look into that."},
         {"role": "user", "content": "Thanks."},
+        {"role": "assistant", "content": "I checked it."},
+        {"role": "user", "content": "What did you find?"},
+        {"role": "assistant", "content": "The request can continue."},
+        {"role": "user", "content": "Please continue."},
         {"role": "assistant", "content": "I am unable to complete that cancellation."},
     ]
     result = validate_dialogue(

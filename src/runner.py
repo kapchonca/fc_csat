@@ -8,10 +8,14 @@ from typing import Any
 
 from src.case_spec_generator import generate_case_specs, save_case_specs
 from src.config import load_configs, read_json
-from src.parser import parse_dialogue
-from src.prompt_builder import build_prompt
+from src.parser import parse_dialogue, parse_dialogue_plan
+from src.prompt_builder import (
+    build_dialogue_plan_prompt,
+    build_dialogue_prompt,
+    build_prompt,
+)
 from src.renderers import get_renderer
-from src.validator import validate_dialogue
+from src.validator import validate_dialogue, validate_dialogue_plan
 
 
 DEFAULT_OUTPUT_DIR = Path("outputs")
@@ -149,6 +153,10 @@ def _render_dialogues(
             "invalid_json": 0,
             "wrong_role": 0,
             "empty_message": 0,
+            "empty_plan_purpose": 0,
+            "message_count_mismatch": 0,
+            "role_pattern_mismatch": 0,
+            "role_plan_mismatch": 0,
         }
     )
 
@@ -163,19 +171,75 @@ def _render_dialogues(
             render_config = dict(generation_config)
             render_config["variant_id"] = variant_id
             render_config["case_id"] = case_spec["case_id"]
-            prompt = build_prompt(case_spec, configs["tool_catalog"], render_config)
-            raw_output = renderer.render(prompt, render_config)
-            parse_result = parse_dialogue(raw_output)
-            validation = validate_dialogue(
-                case_spec=case_spec,
-                messages=parse_result.messages,
-                generation_config=generation_config,
-                tool_catalog=configs["tool_catalog"],
-                variant_id=variant_id,
-                parse_errors=parse_result.errors,
-            )
+            plan_prompt = None
+            raw_plan_output = None
+            plan_parse_errors: list[str] = []
+            parsed_plan = None
+            dialogue_plan = None
+            plan_validation = None
 
-            if validation.status == "passed" and parse_result.messages is not None:
+            if _dialogue_plan_enabled(generation_config):
+                plan_config = dict(render_config)
+                plan_config["render_stage"] = "plan"
+                plan_prompt = build_dialogue_plan_prompt(
+                    case_spec,
+                    configs["tool_catalog"],
+                    plan_config,
+                )
+                raw_plan_output = renderer.render(plan_prompt, plan_config)
+                plan_parse_result = parse_dialogue_plan(raw_plan_output)
+                plan_parse_errors = plan_parse_result.errors
+                parsed_plan = plan_parse_result.items
+                plan_validation = validate_dialogue_plan(
+                    case_spec=case_spec,
+                    plan=parsed_plan,
+                    generation_config=generation_config,
+                    tool_catalog=configs["tool_catalog"],
+                    variant_id=variant_id,
+                    parse_errors=plan_parse_result.errors,
+                )
+                if plan_validation.status == "passed":
+                    dialogue_plan = parsed_plan
+                    render_config["render_stage"] = "dialogue"
+                    prompt = build_dialogue_prompt(
+                        case_spec,
+                        configs["tool_catalog"],
+                        render_config,
+                        dialogue_plan=dialogue_plan,
+                    )
+                    raw_output = renderer.render(prompt, render_config)
+                    parse_result = parse_dialogue(raw_output)
+                    validation = validate_dialogue(
+                        case_spec=case_spec,
+                        messages=parse_result.messages,
+                        generation_config=generation_config,
+                        tool_catalog=configs["tool_catalog"],
+                        variant_id=variant_id,
+                        parse_errors=parse_result.errors,
+                        dialogue_plan=dialogue_plan,
+                    )
+                else:
+                    prompt = None
+                    raw_output = None
+                    parse_result = None
+                    validation = plan_validation
+            else:
+                prompt = build_prompt(case_spec, configs["tool_catalog"], render_config)
+                raw_output = renderer.render(prompt, render_config)
+                parse_result = parse_dialogue(raw_output)
+                validation = validate_dialogue(
+                    case_spec=case_spec,
+                    messages=parse_result.messages,
+                    generation_config=generation_config,
+                    tool_catalog=configs["tool_catalog"],
+                    variant_id=variant_id,
+                    parse_errors=parse_result.errors,
+                )
+
+            parsed_messages = parse_result.messages if parse_result is not None else None
+            parser_errors = parse_result.errors if parse_result is not None else []
+
+            if validation.status == "passed" and parsed_messages is not None:
                 dialogues.append(
                     {
                         "dialogue_id": f"{case_spec['case_id']}_v{variant_id:02d}",
@@ -185,7 +249,7 @@ def _render_dialogues(
                         "variant_id": variant_id,
                         "expected_outcome": case_spec["expected_outcome"],
                         "labels": case_spec["labels"],
-                        "messages": parse_result.messages,
+                        "messages": parsed_messages,
                     }
                 )
             else:
@@ -196,10 +260,20 @@ def _render_dialogues(
                 {
                     "case_id": case_spec["case_id"],
                     "variant_id": variant_id,
+                    "plan_prompt": plan_prompt,
+                    "raw_plan_output": raw_plan_output,
+                    "parsed_plan": parsed_plan,
+                    "plan_parser_errors": plan_parse_errors,
+                    "plan_validator_status": plan_validation.status
+                    if plan_validation is not None
+                    else None,
+                    "plan_validator_errors": plan_validation.errors
+                    if plan_validation is not None
+                    else [],
                     "prompt": prompt,
                     "raw_output": raw_output,
-                    "parsed_output": parse_result.messages,
-                    "parser_errors": parse_result.errors,
+                    "parsed_output": parsed_messages,
+                    "parser_errors": parser_errors,
                     "validator_status": validation.status,
                     "validator_errors": validation.errors,
                     "validator_warnings": validation.warnings,
@@ -241,6 +315,11 @@ def _select_case_specs(
     if missing:
         raise ValueError(f"include_cases references unknown case ids: {missing}")
     return [by_id[case_id] for case_id in include_cases]
+
+
+def _dialogue_plan_enabled(generation_config: dict[str, Any]) -> bool:
+    plan_config = generation_config.get("dialogue_plan")
+    return isinstance(plan_config, dict) and plan_config.get("enabled", False)
 
 
 def _write_json(path: Path, data: Any) -> None:

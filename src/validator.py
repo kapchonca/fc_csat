@@ -35,6 +35,7 @@ def validate_dialogue(
     tool_catalog: list[dict[str, Any]] | None = None,
     variant_id: int = 0,
     parse_errors: list[str] | None = None,
+    dialogue_plan: list[Any] | None = None,
 ) -> ValidationResult:
     errors: list[str] = []
     warnings: list[str] = []
@@ -49,8 +50,41 @@ def validate_dialogue(
 
     _check_roles_and_content(messages, errors)
     _check_message_count(messages, generation_config, errors)
+    _check_role_pattern(messages, generation_config, errors)
+    if dialogue_plan is not None:
+        _check_roles_match_plan(messages, dialogue_plan, errors)
 
     text = _dialogue_text(messages)
+    if rules.get("forbid_tool_names", True) and tool_catalog is not None:
+        _check_tool_names(text, tool_catalog, errors)
+
+    return _result(case_spec["case_id"], variant_id, errors, warnings)
+
+
+def validate_dialogue_plan(
+    case_spec: dict[str, Any],
+    plan: list[Any] | None,
+    generation_config: dict[str, Any],
+    tool_catalog: list[dict[str, Any]] | None = None,
+    variant_id: int = 0,
+    parse_errors: list[str] | None = None,
+) -> ValidationResult:
+    errors: list[str] = []
+    warnings: list[str] = []
+    parse_errors = parse_errors or []
+    rules = _validation_rules(generation_config)
+
+    for error in parse_errors:
+        _add_error(errors, error)
+
+    if plan is None:
+        return _result(case_spec["case_id"], variant_id, errors or ["invalid_json"], warnings)
+
+    _check_plan_roles_and_purpose(plan, errors)
+    _check_message_count(plan, generation_config, errors)
+    _check_role_pattern(plan, generation_config, errors)
+
+    text = _plan_text(plan)
     if rules.get("forbid_tool_names", True) and tool_catalog is not None:
         _check_tool_names(text, tool_catalog, errors)
 
@@ -69,15 +103,64 @@ def _check_roles_and_content(messages: list[Any], errors: list[str]) -> None:
             _add_error(errors, "empty_message")
 
 
+def _check_plan_roles_and_purpose(plan: list[Any], errors: list[str]) -> None:
+    for item in plan:
+        if not isinstance(item, dict):
+            _add_error(errors, "invalid_plan_item")
+            continue
+        if item.get("role") not in {"user", "assistant"}:
+            _add_error(errors, "wrong_role")
+        purpose = item.get("purpose")
+        if not isinstance(purpose, str) or not purpose.strip():
+            _add_error(errors, "empty_plan_purpose")
+
+
 def _check_message_count(
     messages: list[Any],
     generation_config: dict[str, Any],
     errors: list[str],
 ) -> None:
+    plan_config = _dialogue_plan_config(generation_config)
+    if plan_config and plan_config.get("enabled", False):
+        expected_count = plan_config["message_count"]
+        if len(messages) != expected_count:
+            _add_error(errors, "message_count_mismatch")
+        return
+
     message_min = generation_config["output_message_min"]
     message_max = generation_config["output_message_max"]
     if not message_min <= len(messages) <= message_max:
         _add_error(errors, "message_count_out_of_range")
+
+
+def _check_role_pattern(
+    messages: list[Any],
+    generation_config: dict[str, Any],
+    errors: list[str],
+) -> None:
+    plan_config = _dialogue_plan_config(generation_config)
+    if not plan_config or not plan_config.get("enabled", False):
+        return
+
+    expected_roles = plan_config["role_pattern"]
+    actual_roles = [
+        message.get("role") if isinstance(message, dict) else None for message in messages
+    ]
+    if actual_roles != expected_roles:
+        _add_error(errors, "role_pattern_mismatch")
+
+
+def _check_roles_match_plan(
+    messages: list[Any],
+    dialogue_plan: list[Any],
+    errors: list[str],
+) -> None:
+    message_roles = [
+        message.get("role") if isinstance(message, dict) else None for message in messages
+    ]
+    plan_roles = [item.get("role") if isinstance(item, dict) else None for item in dialogue_plan]
+    if message_roles != plan_roles:
+        _add_error(errors, "role_plan_mismatch")
 
 
 def _check_tool_names(
@@ -94,6 +177,14 @@ def _dialogue_text(messages: list[Any]) -> str:
     for message in messages:
         if isinstance(message, dict) and isinstance(message.get("content"), str):
             parts.append(message["content"])
+    return "\n".join(parts)
+
+
+def _plan_text(plan: list[Any]) -> str:
+    parts: list[str] = []
+    for item in plan:
+        if isinstance(item, dict) and isinstance(item.get("purpose"), str):
+            parts.append(item["purpose"])
     return "\n".join(parts)
 
 
@@ -119,6 +210,13 @@ def _validation_rules(generation_config: dict[str, Any]) -> dict[str, Any]:
         else:
             rules[key] = value
     return rules
+
+
+def _dialogue_plan_config(generation_config: dict[str, Any]) -> dict[str, Any] | None:
+    plan_config = generation_config.get("dialogue_plan")
+    if isinstance(plan_config, dict):
+        return plan_config
+    return None
 
 
 def _result(

@@ -135,12 +135,16 @@ def validate_generation_config(generation_config: Any) -> None:
     if not isinstance(variants, int) or variants < 1:
         raise ConfigError("variants_per_case must be a positive integer.")
 
-    for key in ("output_message_min", "output_message_max"):
-        value = generation_config.get(key)
-        if not isinstance(value, int) or value < 1:
-            raise ConfigError(f"{key} must be a positive integer.")
-    if generation_config["output_message_min"] > generation_config["output_message_max"]:
-        raise ConfigError("output_message_min cannot exceed output_message_max.")
+    plan_config = generation_config.get("dialogue_plan")
+    if plan_config is not None:
+        validate_dialogue_plan_config(plan_config)
+    if not isinstance(plan_config, dict) or not plan_config.get("enabled", False):
+        for key in ("output_message_min", "output_message_max"):
+            value = generation_config.get(key)
+            if not isinstance(value, int) or value < 1:
+                raise ConfigError(f"{key} must be a positive integer.")
+        if generation_config["output_message_min"] > generation_config["output_message_max"]:
+            raise ConfigError("output_message_min cannot exceed output_message_max.")
 
     include_cases = generation_config.get("include_cases", [])
     if not isinstance(include_cases, list) or not all(
@@ -150,3 +154,26 @@ def validate_generation_config(generation_config: Any) -> None:
 
     if not isinstance(generation_config.get("model"), str):
         raise ConfigError("model must be a string.")
+
+
+def validate_dialogue_plan_config(plan_config: Any) -> None:
+    if not isinstance(plan_config, dict):
+        raise ConfigError("dialogue_plan must be an object.")
+
+    enabled = plan_config.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("dialogue_plan.enabled must be a boolean.")
+    if not enabled:
+        return
+
+    message_count = plan_config.get("message_count")
+    if not isinstance(message_count, int) or message_count < 1:
+        raise ConfigError("dialogue_plan.message_count must be a positive integer.")
+
+    role_pattern = plan_config.get("role_pattern")
+    if not isinstance(role_pattern, list) or not all(
+        role in {"user", "assistant"} for role in role_pattern
+    ):
+        raise ConfigError("dialogue_plan.role_pattern must contain user/assistant roles.")
+    if len(role_pattern) != message_count:
+        raise ConfigError("dialogue_plan.role_pattern length must equal message_count.")
