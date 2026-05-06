@@ -171,6 +171,7 @@ def _render_dialogues(
             "message_count_mismatch": 0,
             "role_pattern_mismatch": 0,
             "role_plan_mismatch": 0,
+            "render_exception": 0,
         }
     )
 
@@ -180,14 +181,31 @@ def _render_dialogues(
         variants_per_case=variants_per_case,
         limit_dialogues=limit_dialogues,
     )
+    debug_jsonl_path = output_dir / "debug.jsonl"
+    dialogues_jsonl_path = output_dir / "dialogues.jsonl"
     results: list[dict[str, Any]] = []
-    with ThreadPoolExecutor(max_workers=max_parallel_requests) as executor:
+    task_by_future: dict[Any, dict[str, Any]] = {}
+    with (
+        debug_jsonl_path.open("w", encoding="utf-8") as debug_handle,
+        dialogues_jsonl_path.open("w", encoding="utf-8") as dialogues_handle,
+        ThreadPoolExecutor(max_workers=max_parallel_requests) as executor,
+    ):
         futures = [
             executor.submit(_render_dialogue_task, configs, task)
             for task in tasks
         ]
+        task_by_future = {future: task for future, task in zip(futures, tasks)}
         for future in _progress_futures(futures):
-            results.append(future.result())
+            try:
+                result = future.result()
+            except Exception as exc:
+                result = _failed_task_result(task_by_future[future], exc)
+            results.append(result)
+            _write_jsonl_record(debug_handle, result["debug_record"])
+            if result["dialogue"] is not None:
+                _write_jsonl_record(dialogues_handle, result["dialogue"])
+            debug_handle.flush()
+            dialogues_handle.flush()
 
     for result in sorted(results, key=lambda item: item["sequence"]):
         if result["dialogue"] is not None:
@@ -224,7 +242,6 @@ def _render_dialogues(
     }
 
     _write_json(output_dir / "dialogues.json", dialogues)
-    _write_jsonl(output_dir / "debug.jsonl", debug_records)
     _write_json(output_dir / "run_summary.json", summary)
     print(
         f"Rendered {generated} variants: {summary['passed']} passed, "
@@ -441,6 +458,44 @@ def _render_dialogue_task(
     }
 
 
+def _failed_task_result(task: dict[str, Any], exc: Exception) -> dict[str, Any]:
+    case_spec = task["case_spec"]
+    semantic_variant = task["semantic_variant"]
+    variant_id = task["variant_id"]
+    error_code = "render_exception"
+    debug_record = {
+        "case_id": case_spec["case_id"],
+        "semantic_variant": semantic_variant["id"],
+        "variant_id": variant_id,
+        "plan_prompt": None,
+        "raw_plan_output": None,
+        "plan_usage": None,
+        "plan_cost": None,
+        "parsed_plan": None,
+        "plan_parser_errors": [],
+        "plan_validator_status": None,
+        "plan_validator_errors": [],
+        "prompt": None,
+        "raw_output": None,
+        "dialogue_usage": None,
+        "dialogue_cost": None,
+        "parsed_output": None,
+        "parser_errors": [],
+        "validator_status": "failed",
+        "validator_errors": [error_code],
+        "validator_warnings": [],
+        "exception_type": type(exc).__name__,
+        "exception": str(exc),
+    }
+    return {
+        "sequence": task["sequence"],
+        "dialogue": None,
+        "debug_record": debug_record,
+        "validation_errors": [error_code],
+        "usage_records": [],
+    }
+
+
 def _semantic_variants(generation_config: dict[str, Any]) -> list[dict[str, str]]:
     variants = generation_config.get("semantic_variants", [])
     if not variants:
@@ -627,7 +682,11 @@ def _write_json(path: Path, data: Any) -> None:
 def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for record in records:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+            _write_jsonl_record(handle, record)
+
+
+def _write_jsonl_record(handle: Any, record: dict[str, Any]) -> None:
+    handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":
