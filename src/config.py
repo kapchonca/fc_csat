@@ -10,10 +10,10 @@ class ConfigError(ValueError):
 
 
 REQUIRED_CONFIG_FILES = {
-    "tool_catalog": "tool_catalog.json",
-    "action_graph": "action_graph_product_support.json",
-    "case_templates": "case_templates.json",
-    "generation_config": "generation_config.json",
+    "tool_catalog": ("tools.json", "tool_catalog.json"),
+    "action_graph": ("graph.json", "action_graph_product_support.json"),
+    "case_templates": ("cases.json", "case_templates.json"),
+    "generation_config": ("generation.json", "generation_config.json"),
 }
 
 
@@ -37,9 +37,9 @@ def load_configs(
         key: read_json(
             Path(generation_config_path)
             if key == "generation_config" and generation_config_path is not None
-            else root / filename
+            else _resolve_config_path(root, filenames)
         )
-        for key, filename in REQUIRED_CONFIG_FILES.items()
+        for key, filenames in REQUIRED_CONFIG_FILES.items()
     }
 
     validate_tool_catalog(configs["tool_catalog"])
@@ -47,6 +47,14 @@ def load_configs(
     validate_case_templates(configs["case_templates"])
     validate_generation_config(configs["generation_config"])
     return configs
+
+
+def _resolve_config_path(root: Path, filenames: tuple[str, ...]) -> Path:
+    for filename in filenames:
+        path = root / filename
+        if path.exists():
+            return path
+    return root / filenames[0]
 
 
 def validate_tool_catalog(tool_catalog: Any) -> None:
