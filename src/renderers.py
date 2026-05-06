@@ -88,7 +88,7 @@ class APIRenderer(DialogueRenderer):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=config.get("api_timeout", 60)) as response:
+            with urllib.request.urlopen(request, timeout=config.get("api_timeout", 180)) as response:
                 response_body = response.read().decode("utf-8")
         except urllib.error.URLError as exc:
             raise RendererError(f"API request failed: {exc}") from exc
@@ -216,11 +216,11 @@ def _mock_messages(
             _user(f"Please help with a payment to {merchant} for {amount}."),
             _assistant("Please confirm your account ending and the one-time security code."),
             _user(f"Account {account}, code 481926."),
-            _assistant("I opened a support inquiry using the details you gave me."),
-            _user("Did you check the payment status first?"),
-            _assistant("No, I moved ahead too early. I am checking the payment status now before finalizing the inquiry."),
-            _user("Okay, please finish it once that is checked."),
-            _assistant("Done. I checked the payment status, corrected the inquiry details, and the support inquiry is now complete."),
+            _assistant("I can start an inquiry with the details you gave me."),
+            _user("before that, can you tell me if the payment actually went through?"),
+            _assistant("Yes, let me confirm that first. The payment is still pending, so an inquiry makes sense."),
+            _user("ok, please finish it then."),
+            _assistant("Done. The inquiry is open and includes the pending payment details."),
         ]
         return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
@@ -229,24 +229,24 @@ def _mock_messages(
             _user(f"I need help with a payment to {merchant} for {amount}."),
             _assistant("I can help. Please confirm your account ending and the security code."),
             _user(f"Ending {account}, code 481926."),
-            _assistant("I checked the payment status and also reviewed the recent payment list to compare it."),
-            _user("Was that extra review necessary?"),
-            _assistant("It was not necessary, but it did not change the result."),
-            _user("Okay, please continue."),
-            _assistant("Done. The inquiry has been created with the payment status included."),
+            _assistant("I found that payment. I am also going through your recent payment activity to compare it with nearby charges."),
+            _user("i only need help with that one payment."),
+            _assistant("Understood. The payment is still pending, and I can open an inquiry for that payment."),
+            _user("yes, do that."),
+            _assistant("Done. The inquiry is open with the details for that payment."),
         ]
         return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
     if condition == "wrong_order":
         messages = [
             _user(f"Can you check a payment to {merchant} for {amount} and open an inquiry if needed?"),
-            _assistant("I opened the support inquiry first and then started checking the payment status."),
-            _user("I asked you to check the status before opening anything. Did that happen?"),
-            _assistant("No. I opened it too early, so I am correcting that by checking the status now and updating the inquiry."),
-            _user("Can you complete it in the right order now?"),
-            _assistant("Yes. I checked the payment status and confirmed the inquiry is still needed."),
-            _user("Please finish it with the verified status included."),
-            _assistant("Done. I updated the inquiry with the verified status, and the request is complete."),
+            _assistant("I started an inquiry for that payment."),
+            _user("but what happened with the payment? i still don't know if it needs an inquiry."),
+            _assistant("You're right to ask. The payment is still pending, so the inquiry is appropriate."),
+            _user("ok, can you make sure the case has that info?"),
+            _assistant("Yes. I added the pending status to the inquiry."),
+            _user("so it's all set now?"),
+            _assistant("Yes. The inquiry is complete with the payment status included."),
         ]
         return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
@@ -255,24 +255,24 @@ def _mock_messages(
             _user(f"I need help with the status of a payment to {merchant} for {amount}."),
             _assistant("Please confirm your account ending and security code."),
             _user(f"Account ending {account}, code 481926."),
-            _assistant("I pulled up a broad list of recent payments instead of checking that specific payment."),
-            _user("That does not answer whether this payment needs an inquiry."),
-            _assistant("You're right. I used a related search, so I am now checking the specific payment status."),
+            _assistant("I can see several recent payments around that amount on the account."),
+            _user("that doesn't tell me what happened with the one i asked about."),
+            _assistant("Understood. I found the specific payment now, and it is still pending."),
             _user("Please open the inquiry if it still needs one."),
-            _assistant("Done. I checked the specific payment and opened the inquiry with the correct payment details."),
+            _assistant("Done. The inquiry is open with the details for that payment."),
         ]
         return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
     if condition == "wrong_parameter":
         messages = [
             _user(f"Please check my payment for {amount}."),
-            _assistant("I tried to proceed using only the amount."),
-            _user(f"The merchant was {merchant}."),
-            _assistant("Thanks. With the merchant and amount together, I can identify the exact payment now."),
+            _assistant("I see a payment for that amount to Harbor Books."),
+            _user(f"no, mine was {merchant}."),
+            _assistant("Thanks, that helps. I found the payment to that merchant now, and it is still pending."),
             _user("So can you open the inquiry with the right details?"),
-            _assistant("Yes. I checked the corrected payment details and prepared the inquiry."),
+            _assistant("Yes. I have the right payment details now."),
             _user("Then is this completed?"),
-            _assistant("Yes. The inquiry is complete with the corrected payment details attached."),
+            _assistant("Yes. The inquiry is complete with the correct payment attached."),
         ]
         return _apply_mock_semantic_variant(messages, semantic_variant_id)
 
@@ -296,32 +296,32 @@ def _mock_plan(condition: str) -> list[dict[str, str]]:
             ("user", "The customer asks for help with a payment issue."),
             ("assistant", "The assistant asks for secure session confirmation."),
             ("user", "The customer provides the requested confirmation."),
-            ("assistant", "The assistant moves forward before making an expected status check."),
-            ("user", "The customer asks whether that status check happened first."),
-            ("assistant", "The assistant acknowledges the omission and performs the missing check."),
-            ("user", "The customer asks the assistant to finish the request correctly."),
-            ("assistant", "The assistant completes the request after correcting the omission."),
+            ("assistant", "The assistant starts moving toward an inquiry before answering what happened with the payment."),
+            ("user", "The customer asks for the missing payment answer in ordinary language."),
+            ("assistant", "The assistant answers the missing payment question."),
+            ("user", "The customer asks the assistant to finish the request."),
+            ("assistant", "The assistant completes the request with the payment answer included."),
         ]
     elif condition == "extra_step":
         purposes = [
             ("user", "The customer asks for help with a payment issue."),
             ("assistant", "The assistant asks for secure session confirmation."),
             ("user", "The customer provides the requested confirmation."),
-            ("assistant", "The assistant does the needed check and an unnecessary related review."),
-            ("user", "The customer asks whether the extra review was needed."),
-            ("assistant", "The assistant says it was unnecessary but not blocking."),
-            ("user", "The customer asks the assistant to continue."),
+            ("assistant", "The assistant answers the specific payment question but also starts a broad account review the customer did not ask for."),
+            ("user", "The customer redirects the assistant back to the one payment."),
+            ("assistant", "The assistant returns to the requested payment issue."),
+            ("user", "The customer asks the assistant to continue with that payment."),
             ("assistant", "The assistant says the request is completed."),
         ]
     elif condition == "wrong_order":
         purposes = [
             ("user", "The customer asks to check a payment and open an inquiry only if needed."),
-            ("assistant", "The assistant opens the inquiry before checking the payment status."),
-            ("user", "The customer asks whether the status was checked first."),
-            ("assistant", "The assistant acknowledges the order problem and checks the status."),
-            ("user", "The customer asks whether it can still be completed correctly."),
-            ("assistant", "The assistant corrects the inquiry using the verified status."),
-            ("user", "The customer asks whether the request is now complete."),
+            ("assistant", "The assistant starts an inquiry before explaining what happened with the payment."),
+            ("user", "The customer says they still do not know whether the inquiry is needed."),
+            ("assistant", "The assistant answers the payment question and connects it to the inquiry."),
+            ("user", "The customer asks the assistant to make sure the inquiry has that information."),
+            ("assistant", "The assistant updates the inquiry with the payment answer."),
+            ("user", "The customer asks whether everything is set."),
             ("assistant", "The assistant says the corrected request is complete."),
         ]
     elif condition == "wrong_tool":
@@ -329,20 +329,20 @@ def _mock_plan(condition: str) -> list[dict[str, str]]:
             ("user", "The customer asks for help with a specific payment."),
             ("assistant", "The assistant asks for secure session confirmation."),
             ("user", "The customer provides the requested confirmation."),
-            ("assistant", "The assistant performs a related broad lookup instead of the specific check."),
-            ("user", "The customer says this does not answer the request."),
-            ("assistant", "The assistant acknowledges the mismatch and performs the specific check."),
-            ("user", "The customer asks the assistant to continue with the correct information."),
+            ("assistant", "The assistant gives a broad account answer instead of answering about the specific payment."),
+            ("user", "The customer says their specific payment question is still unanswered."),
+            ("assistant", "The assistant answers the specific payment question."),
+            ("user", "The customer asks the assistant to continue with that payment."),
             ("assistant", "The assistant completes the request with the correct payment details."),
         ]
     elif condition == "wrong_parameter":
         purposes = [
             ("user", "The customer asks for help using incomplete payment details."),
-            ("assistant", "The assistant tries to proceed with insufficient details."),
-            ("user", "The customer adds one more detail."),
-            ("assistant", "The assistant uses the corrected details to identify the exact payment."),
+            ("assistant", "The assistant focuses on a nearby payment that may not be the customer's payment."),
+            ("user", "The customer gives a natural clarification about the payment."),
+            ("assistant", "The assistant finds the intended payment using the clarification."),
             ("user", "The customer asks whether the inquiry can be opened correctly."),
-            ("assistant", "The assistant prepares the inquiry with the corrected details."),
+            ("assistant", "The assistant confirms the intended payment details."),
             ("user", "The customer asks whether the request is completed."),
             ("assistant", "The assistant says the corrected request is completed."),
         ]

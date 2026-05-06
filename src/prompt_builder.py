@@ -7,27 +7,30 @@ from typing import Any
 CONDITION_RENDERING_INSTRUCTIONS = {
     "correct": "The assistant completes the customer request smoothly and safely.",
     "skip_step": (
-        "The assistant moves forward without an expected check. The customer should "
-        "be able to notice that an important check was missed. The assistant then "
-        "corrects the omission and completes the request."
+        "The assistant moves ahead before giving the customer the key answer they "
+        "needed. The customer reacts to the missing answer in ordinary language, "
+        "then the assistant checks the missing detail and completes the request."
     ),
     "extra_step": (
-        "The assistant performs one unnecessary additional step before completing "
-        "the request."
+        "The assistant spends time on a broader account or payment review that the "
+        "customer did not ask for and that is not needed for this request. The task "
+        "is still completed."
     ),
     "wrong_order": (
-        "The assistant performs actions in an unsafe or illogical order. The customer "
-        "should be able to notice the order problem, after which the assistant corrects "
-        "course and completes the request."
+        "The assistant starts an inquiry before first showing whether the payment "
+        "actually needs one. The customer reacts to still not having the answer they "
+        "asked for, then the assistant checks the payment and completes the request."
     ),
     "wrong_tool": (
-        "The assistant performs a related but incorrect action. The customer should be "
-        "able to notice the mismatch, after which the assistant uses the correct action "
-        "and completes the request."
+        "The assistant gives a broad or adjacent account answer instead of answering "
+        "the specific payment question. The customer reacts because their question is "
+        "still unanswered, then the assistant checks the specific payment and completes "
+        "the request."
     ),
     "wrong_parameter": (
-        "The assistant initially uses insufficient or incorrect details. The assistant "
-        "then obtains or applies the correct details and completes the request."
+        "The assistant initially relies on a vague or mistaken detail and risks focusing "
+        "on the wrong payment. The customer provides a clarifying detail naturally, then "
+        "the assistant uses the corrected detail and completes the request."
     ),
 }
 
@@ -72,22 +75,27 @@ def build_dialogue_plan_prompt(
             f"Error metadata: {json.dumps(case_spec.get('error'))}",
             f"Experimental labels: {json.dumps(case_spec['labels'])}",
             "",
-            "Relevant declarative action labels. These are not real API calls.",
+            "Private banking support context. Use this for grounding, not for wording.",
             _format_relevant_tools(relevant_tools),
             "",
             "Planning requirements:",
             f"- Return exactly {message_count} plan items.",
             f"- Use this exact role pattern: {json.dumps(role_pattern)}.",
             "- Each item must describe the purpose of that message in natural language.",
-            "- The plan must make the condition visible to a survey respondent.",
+            "- The plan must make the customer-visible behavior clear without naming the technical mistake.",
             "- The plan must make the expected final outcome clear.",
             "- Refer to banking actions only in customer-facing plain language.",
+            "- The customer should sound like a normal banking customer, not an evaluator or system designer.",
+            "- The customer should react to what is missing, confusing, or unhelpful, not explain internal process.",
             "",
             "Condition-specific planning instruction:",
             _condition_planning_instruction(case_spec, tools),
             "",
             "Forbidden behavior:",
             "- Do not mention internal tool ids, trace, case id, condition names, labels, or error labels.",
+            "- Do not make the customer name the mistake directly.",
+            "- Avoid evaluator phrases such as you skipped, wrong order, wrong tool, required check, correct sequence, or operations history is not the same.",
+            "- Avoid process-heavy words such as retrieve, lookup, backend, workflow, or sequence.",
             f"- Do not mention exact action ids: {forbidden_tool_ids}.",
             "- Do not add markdown, comments, explanations, headings, or text outside the JSON.",
             "",
@@ -140,7 +148,7 @@ def build_dialogue_prompt(
             f"Semantic variant id: {semantic_variant['id']}",
             *plan_lines,
             "",
-            "Relevant declarative action labels. These are not real API calls.",
+            "Private banking support context. Use this for grounding, not for wording.",
             _format_relevant_tools(relevant_tools),
             "",
             "How the condition should be visible:",
@@ -152,6 +160,9 @@ def build_dialogue_prompt(
             "- Use realistic but fictional banking details such as merchant names, amounts, dates, and account endings.",
             "- Make the expected final outcome clear in the final assistant message.",
             "- The assistant can describe customer-facing checks, delays, or issues in plain language.",
+            "- The customer must not sound like they know the assistant's internal action graph or implementation.",
+            "- The customer should not explicitly diagnose the technical mistake; they should react to the unsatisfied request.",
+            "- The assistant should not narrate backend steps or use process-heavy wording.",
             "- Preserve the semantic style from the validated plan.",
             f"- Semantic rendering instruction: {semantic_variant['instruction']}",
             "",
@@ -159,6 +170,7 @@ def build_dialogue_prompt(
             "- Do not mention internal tool ids, trace, case id, condition names, labels, or error labels.",
             "- Do not mention the semantic variant id or say that a style variant is being used.",
             "- Do not use words such as trace, tool, condition, wrong_parameter, missing_input, skip_step, wrong_order, wrong_tool, task_completed, or task_failed.",
+            "- Avoid evaluator or pipeline phrases such as you skipped, wrong order, wrong tool, required check, correct sequence, retrieve, lookup, or operations history is not the same.",
             f"- Do not mention exact action ids: {forbidden_tool_ids}.",
             "- Do not add markdown, comments, explanations, headings, or text outside the JSON.",
             "",
@@ -189,13 +201,7 @@ def _relevant_tools(
 
 def _format_relevant_tools(relevant_tools: list[dict[str, Any]]) -> str:
     return "\n".join(
-        "- {id}: {description} Inputs: {inputs}. Adds: {adds}. Possible errors: {errors}.".format(
-            id=tool["id"],
-            description=tool["description"],
-            inputs=", ".join(tool["inputs"]),
-            adds=", ".join(tool["adds"]),
-            errors=", ".join(tool["errors"]),
-        )
+        f"- {tool['description']}"
         for tool in relevant_tools
     )
 
@@ -207,44 +213,49 @@ def _condition_planning_instruction(
     condition = case_spec["condition"]
     error = case_spec.get("error") or {}
     if condition == "correct":
-        return "Plan a smooth exchange where the assistant handles the request in the proper order."
-    if condition == "skip_step":
-        skipped = _action_description(error.get("at"), tools)
         return (
-            "Plan an exchange where the assistant moves forward without this expected "
-            f"customer-facing check: {skipped}. The customer should notice the omission, "
-            "then the assistant should correct the omitted check and complete the request."
+            "Plan a smooth exchange where the customer asks about a payment, the assistant "
+            "answers the payment question, and the assistant completes the requested inquiry."
+        )
+    if condition == "skip_step":
+        return (
+            "Plan an exchange where the assistant starts moving toward a support inquiry "
+            "before telling the customer what is happening with the payment. The customer "
+            "should ask a normal follow-up like whether the payment went through or what "
+            "its status is. The assistant then answers that missing question and completes "
+            "the inquiry."
         )
     if condition == "extra_step":
-        extra = _action_description(error.get("at"), tools)
-        anchor = _action_description(error.get("anchor"), tools)
         return (
-            "Plan an exchange where the assistant performs an unnecessary additional "
-            f"step after {anchor}: {extra}. The request can still be completed."
+            "Plan an exchange where the assistant has enough detail to answer the specific "
+            "payment question but first spends a turn on a broad, unnecessary review such "
+            "as recent payments or other products. The customer did not ask for that broad "
+            "review and should not be the one requesting it. The assistant still completes "
+            "the original request."
         )
     if condition == "wrong_order":
-        performed = _action_description(error.get("at"), tools)
-        required = _action_description(error.get("required_before"), tools)
         return (
-            "Plan an exchange where the assistant does this too early: "
-            f"{performed}. It should have happened only after: {required}. "
-            "The customer should be able to object to the order, then the assistant "
-            "should correct the sequence and complete the request."
+            "Plan an exchange where the assistant opens or starts an inquiry before first "
+            "telling the customer whether the payment appears to need one. The customer "
+            "should not say this is the wrong order; they should ask why they still do not "
+            "know what happened with the payment. The assistant then checks the payment, "
+            "uses that answer to update the inquiry, and completes the request."
         )
     if condition == "wrong_tool":
-        expected = _action_description(error.get("at"), tools)
-        replacement = _action_description(error.get("replacement"), tools)
         return (
-            "Plan an exchange where the assistant performs a related but incorrect "
-            f"action: {replacement}. The expected action was: {expected}. The assistant "
-            "should then correct course and complete the request."
+            "Plan an exchange where the assistant gives a broad adjacent answer, such as "
+            "a list or general payment activity, instead of answering the customer's question "
+            "about one specific payment. The customer should say that this still does not "
+            "tell them what is happening with that payment. The assistant then checks the "
+            "specific payment and completes the request."
         )
     if condition == "wrong_parameter":
-        action = _action_description(error.get("at"), tools)
         return (
-            "Plan an exchange where the assistant tries to proceed with insufficient "
-            f"or incorrect details for this action: {action}. The assistant should then "
-            "resolve the details and complete the request."
+            "Plan an exchange where the assistant initially relies on a vague or mistaken "
+            "detail, such as only an amount, the wrong date, or the wrong merchant, and "
+            "starts to focus on a payment that may not be the customer's payment. The "
+            "customer should clarify naturally, without saying parameter error. The assistant "
+            "then uses the corrected detail and completes the request."
         )
     return CONDITION_RENDERING_INSTRUCTIONS[condition]
 
