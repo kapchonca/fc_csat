@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dialogue Viewer</title>
+    <link rel="stylesheet" href="./dialogue_viewer.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <header class="panel-header">
+          <div>
+            <h1>Dialogues</h1>
+            <p id="datasetStatus">No dataset loaded</p>
+          </div>
+        </header>
+
+        <section class="loader">
+          <label class="path-label" for="jsonPath">JSON path</label>
+          <div class="path-row">
+            <input
+              id="jsonPath"
+              type="text"
+              value="../outputs_product_support_openai/20260505_145415_412796/dialogues.json"
+              autocomplete="off"
+            />
+            <button id="loadPathButton" type="button">Load</button>
+          </div>
+          <label class="file-button">
+            <input id="fileInput" type="file" accept="application/json,.json" />
+            Open JSON file
+          </label>
+        </section>
+
+        <section class="filters">
+          <input id="searchInput" type="search" placeholder="Search dialogues" />
+          <select id="conditionFilter">
+            <option value="">All conditions</option>
+          </select>
+          <select id="semanticFilter">
+            <option value="">All variants</option>
+          </select>
+        </section>
+
+        <section id="dialogueList" class="dialogue-list" aria-label="Dialogue list"></section>
+      </aside>
+
+      <section class="chat-panel">
+        <header class="chat-header">
+          <div>
+            <h2 id="dialogueTitle">Load a dataset</h2>
+            <p id="dialogueMeta">Select a dialogue to preview and edit messages.</p>
+          </div>
+          <div class="actions">
+            <button id="resetDialogueButton" type="button" disabled>Reset</button>
+            <button id="copyDialogueButton" type="button" disabled>Copy</button>
+            <button id="downloadButton" type="button" disabled>Download JSON</button>
+          </div>
+        </header>
+
+        <section id="emptyState" class="empty-state">
+          <div>
+            <h3>No dialogue selected</h3>
+            <p>Load a generated dialogues.json file, then pick a dialogue from the list.</p>
+          </div>
+        </section>
+
+        <section id="chatMessages" class="chat-messages" aria-label="Editable chat messages"></section>
+      </section>
+    </main>
+
+    <script src="./dialogue_viewer.js"></script>
+  </body>
+</html>
