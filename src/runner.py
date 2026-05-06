@@ -19,6 +19,11 @@ from src.prompt_builder import (
 from src.renderers import get_renderer
 from src.validator import validate_dialogue, validate_dialogue_plan
 
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover - optional progress display
+    tqdm = None
+
 
 DEFAULT_OUTPUT_DIR = Path("outputs")
 
@@ -181,7 +186,7 @@ def _render_dialogues(
             executor.submit(_render_dialogue_task, configs, task)
             for task in tasks
         ]
-        for future in as_completed(futures):
+        for future in _progress_futures(futures):
             results.append(future.result())
 
     for result in sorted(results, key=lambda item: item["sequence"]):
@@ -239,6 +244,18 @@ def _select_case_specs(
     if missing:
         raise ValueError(f"include_cases references unknown case ids: {missing}")
     return [by_id[case_id] for case_id in include_cases]
+
+
+def _progress_futures(futures: list[Any]) -> Any:
+    completed = as_completed(futures)
+    if tqdm is None:
+        return completed
+    return tqdm(
+        completed,
+        total=len(futures),
+        desc="Rendering dialogues",
+        unit="dialogue",
+    )
 
 
 def _dialogue_plan_enabled(generation_config: dict[str, Any]) -> bool:
