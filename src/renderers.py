@@ -91,6 +91,15 @@ class APIRenderer(DialogueRenderer):
         try:
             with urllib.request.urlopen(request, timeout=config.get("api_timeout", 180)) as response:
                 response_body = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            error_body = exc.read().decode("utf-8", errors="replace")
+            raise RendererError(
+                _format_http_error(
+                    status=exc.code,
+                    reason=exc.reason,
+                    body=error_body,
+                )
+            ) from exc
         except urllib.error.URLError as exc:
             raise RendererError(f"API request failed: {exc}") from exc
 
@@ -175,6 +184,37 @@ def _api_headers(config: dict[str, Any], provider: str, api_key: str) -> dict[st
             headers["X-Title"] = config["app_title"]
     headers.update(config.get("extra_headers", {}))
     return headers
+
+
+def _format_http_error(status: int, reason: str, body: str) -> str:
+    body = body.strip()
+    detail = _extract_api_error_message(body)
+    message = f"API request failed: HTTP {status} {reason}"
+    if detail:
+        message += f": {detail}"
+    if body and body != detail:
+        message += f" | response_body={body}"
+    return message
+
+
+def _extract_api_error_message(body: str) -> str:
+    if not body:
+        return ""
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return body
+    error = data.get("error") if isinstance(data, dict) else None
+    if isinstance(error, dict):
+        parts = [
+            str(error[key])
+            for key in ("message", "type", "code", "param")
+            if error.get(key)
+        ]
+        return " | ".join(parts)
+    if isinstance(error, str):
+        return error
+    return body
 
 
 def _response_format(config: dict[str, Any]) -> dict[str, Any] | None:

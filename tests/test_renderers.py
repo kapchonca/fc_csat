@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 
 import pytest
 
-from src.renderers import APIRenderer, get_renderer
+from src.renderers import APIRenderer, RendererError, get_renderer
 
 
 class _FakeResponse:
@@ -145,3 +146,44 @@ def test_openrouter_renderer_uses_openrouter_defaults(
     assert captured["headers"]["Authorization"] == "Bearer router-key"
     assert captured["headers"]["Http-referer"] == "http://localhost"
     assert captured["headers"]["X-title"] == "fc-csat"
+
+
+def test_api_renderer_includes_http_error_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_urlopen(request, timeout):
+        raise urllib.error.HTTPError(
+            url=request.full_url,
+            code=429,
+            msg="Too Many Requests",
+            hdrs={},
+            fp=_ErrorBody(),
+        )
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    renderer = get_renderer({"renderer": "openai", "model": "gpt-5-mini"})
+    with pytest.raises(RendererError) as exc_info:
+        renderer.render("prompt", {"renderer": "openai", "model": "gpt-5-mini"})
+
+    message = str(exc_info.value)
+    assert "HTTP 429 Too Many Requests" in message
+    assert "insufficient quota" in message
+    assert "insufficient_quota" in message
+
+
+class _ErrorBody:
+    def read(self) -> bytes:
+        return json.dumps(
+            {
+                "error": {
+                    "message": "insufficient quota",
+                    "type": "insufficient_quota",
+                    "code": "billing_hard_limit_reached",
+                }
+            }
+        ).encode("utf-8")
+
+    def close(self) -> None:
+        return None
