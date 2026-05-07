@@ -20,33 +20,41 @@
     "done"
   ],
   "dependency_edges": [
-    ["verify_customer_session", "list_customer_products"],
-    ["verify_customer_session", "get_applications"],
-    ["verify_customer_session", "get_operations_payment"],
     ["verify_customer_session", "get_status_payment"],
-    ["list_customer_products", "get_operations_loan"],
-    ["list_customer_products", "get_operations_payment"],
-    ["list_customer_products", "get_operations_debit"],
-    ["list_customer_products", "get_status_loan"],
-    ["list_customer_products", "get_status_payment"],
-    ["list_customer_products", "get_status_debit"],
-    ["get_applications", "get_application_details"],
-    ["get_applications", "get_status_application"],
-    ["get_operations_loan", "get_operation_details"],
+    ["verify_customer_session", "get_operations_payment"],
+    ["get_status_payment", "get_operation_details"],
     ["get_operations_payment", "get_operation_details"],
-    ["get_operations_debit", "get_operation_details"],
-    ["get_operation_details", "get_status_loan"],
-    ["get_operation_details", "get_status_payment"],
-    ["get_operation_details", "get_status_debit"],
-    ["get_status_loan", "get_loan_payment_allocation"],
-    ["get_status_loan", "create_loan_investigation_case"],
-    ["get_loan_payment_allocation", "create_loan_investigation_case"],
     ["get_status_payment", "create_payment_inquiry"],
+    ["get_operation_details", "create_payment_inquiry"],
+
+    ["verify_customer_session", "get_status_debit"],
+    ["verify_customer_session", "get_operations_debit"],
+    ["verify_customer_session", "list_customer_products"],
+    ["list_customer_products", "get_status_debit"],
+    ["list_customer_products", "get_operations_debit"],
+    ["get_status_debit", "get_operations_debit"],
+    ["get_operations_debit", "get_operation_details"],
     ["get_status_debit", "create_debit_case"],
+
+    ["verify_customer_session", "get_status_loan"],
+    ["verify_customer_session", "get_operations_loan"],
+    ["list_customer_products", "get_status_loan"],
+    ["list_customer_products", "get_operations_loan"],
+    ["get_status_loan", "get_operations_loan"],
+    ["get_operations_loan", "get_operation_details"],
+    ["get_status_loan", "get_loan_payment_allocation"],
+    ["get_loan_payment_allocation", "create_loan_investigation_case"],
+    ["get_status_loan", "create_loan_investigation_case"],
+
+    ["verify_customer_session", "get_applications"],
+    ["get_applications", "get_status_application"],
+    ["get_applications", "get_application_details"],
+    ["get_status_application", "get_application_details"],
     ["get_status_application", "create_application_case"],
     ["get_application_details", "create_application_case"],
-    ["create_debit_case", "done"],
+
     ["create_payment_inquiry", "done"],
+    ["create_debit_case", "done"],
     ["create_loan_investigation_case", "done"],
     ["create_application_case", "done"]
   ],
@@ -54,47 +62,86 @@
     ["get_status_payment", "create_payment_inquiry"],
     ["get_status_debit", "create_debit_case"],
     ["get_status_application", "create_application_case"],
-    ["get_status_loan", "create_loan_investigation_case"],
+    ["get_application_details", "create_application_case"],
     ["get_loan_payment_allocation", "create_loan_investigation_case"],
+    ["get_status_loan", "create_loan_investigation_case"],
+    ["get_status_loan", "get_loan_payment_allocation"],
+
+    ["verify_customer_session", "get_status_payment"],
+    ["verify_customer_session", "get_operations_payment"],
+    ["verify_customer_session", "get_operation_details"],
+    ["verify_customer_session", "create_payment_inquiry"],
+
     ["verify_customer_session", "list_customer_products"],
     ["verify_customer_session", "get_applications"],
-    ["verify_customer_session", "get_operations_loan"],
-    ["verify_customer_session", "get_operations_payment"],
-    ["verify_customer_session", "get_operations_debit"],
     ["verify_customer_session", "get_application_details"],
-    ["verify_customer_session", "get_operation_details"],
+    ["verify_customer_session", "get_status_application"],
+    ["verify_customer_session", "get_operations_loan"],
+    ["verify_customer_session", "get_operations_debit"],
     ["verify_customer_session", "get_status_loan"],
-    ["verify_customer_session", "get_status_payment"],
-    ["verify_customer_session", "get_status_debit"],
-    ["verify_customer_session", "get_status_application"]
+    ["verify_customer_session", "get_status_debit"]
   ],
   "recovery_edges": [
     ["missing_input@verify_customer_session", "verify_customer_session"],
-    ["missing_input@get_operations_payment", "get_operations_payment"],
-    ["wrong_parameter@get_operations_payment", "get_operations_payment"],
+
     ["missing_input@get_status_payment", "get_status_payment"],
     ["wrong_parameter@get_status_payment", "get_status_payment"],
+    ["payment_not_found@get_status_payment", "get_status_payment"],
+
+    ["missing_input@get_operations_payment", "get_operations_payment"],
+    ["wrong_parameter@get_operations_payment", "get_operations_payment"],
+
+    ["missing_input@get_operation_details", "get_operation_details"],
+    ["wrong_parameter@get_operation_details", "get_operation_details"],
+    ["operation_not_found@get_operation_details", "get_operation_details"],
+
     ["missing_input@create_payment_inquiry", "create_payment_inquiry"],
-    ["wrong_parameter@create_payment_inquiry", "create_payment_inquiry"]
+    ["wrong_parameter@create_payment_inquiry", "create_payment_inquiry"],
+    ["payment_not_found@create_payment_inquiry", "get_status_payment"],
+
+    ["missing_input@get_status_debit", "get_status_debit"],
+    ["wrong_parameter@get_status_debit", "get_status_debit"],
+    ["missing_input@create_debit_case", "create_debit_case"],
+    ["wrong_parameter@create_debit_case", "create_debit_case"],
+
+    ["missing_input@get_status_loan", "get_status_loan"],
+    ["wrong_parameter@get_status_loan", "get_status_loan"],
+    ["missing_input@get_loan_payment_allocation", "get_loan_payment_allocation"],
+    ["wrong_parameter@get_loan_payment_allocation", "get_loan_payment_allocation"],
+    ["missing_input@create_loan_investigation_case", "create_loan_investigation_case"],
+    ["wrong_parameter@create_loan_investigation_case", "create_loan_investigation_case"],
+
+    ["missing_input@get_status_application", "get_status_application"],
+    ["wrong_parameter@get_status_application", "get_status_application"],
+    ["missing_input@get_application_details", "get_application_details"],
+    ["wrong_parameter@get_application_details", "get_application_details"],
+    ["missing_input@create_application_case", "create_application_case"],
+    ["wrong_parameter@create_application_case", "create_application_case"]
   ],
   "confusion_edges": [
     ["get_status_payment", "get_operations_payment"],
     ["get_operations_payment", "get_status_payment"],
+
     ["get_status_loan", "get_operations_loan"],
     ["get_operations_loan", "get_status_loan"],
+
     ["get_status_debit", "get_operations_debit"],
     ["get_operations_debit", "get_status_debit"],
+
     ["get_status_application", "get_application_details"],
     ["get_application_details", "get_status_application"],
-    ["create_payment_inquiry", "get_operations_payment"],
-    ["create_loan_investigation_case", "get_operations_loan"],
-    ["create_debit_case", "get_operations_debit"],
-    ["create_application_case", "get_applications"]
+
+    ["create_payment_inquiry", "create_debit_case"],
+    ["create_debit_case", "create_payment_inquiry"],
+    ["create_loan_investigation_case", "create_debit_case"],
+    ["create_application_case", "get_application_details"]
   ],
   "extra_step_candidates": [
+    ["get_status_payment", "get_operation_details"],
     ["get_status_payment", "get_operations_payment"],
-    ["get_status_loan", "get_operations_loan"],
+
     ["get_status_debit", "get_operations_debit"],
+    ["get_status_loan", "get_operations_loan"],
     ["get_status_application", "get_application_details"]
   ]
 }

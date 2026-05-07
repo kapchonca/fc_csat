@@ -2,7 +2,7 @@
   "include_cases": [
     "payment_inquiry_correct",
     "payment_inquiry_skip_step_get_status_payment",
-    "payment_inquiry_extra_step_get_operations_payment",
+    "payment_inquiry_extra_step_get_operation_details",
     "payment_inquiry_wrong_order_get_status_payment_create_payment_inquiry",
     "payment_inquiry_wrong_tool_get_status_payment",
     "payment_inquiry_wrong_parameter_get_status_payment"
