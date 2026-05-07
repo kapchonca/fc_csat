@@ -34,6 +34,9 @@ def test_correct_case_generation() -> None:
         "create_payment_inquiry",
         "done",
     ]
+    assert spec["user_goal"].startswith("Find out what happened")
+    assert spec["target_action"] == "get_status_payment"
+    assert spec["downstream_action"] == "create_payment_inquiry"
     assert spec["expected_outcome"] == "task_completed"
     assert spec["labels"] == ["correct", "task_completed"]
 
@@ -62,7 +65,12 @@ def test_skip_step_not_recovered_generation() -> None:
         "done",
     ]
     assert spec["expected_outcome"] == "task_failed"
-    assert spec["labels"] == ["skip_step", "not_recovered", "task_failed"]
+    assert spec["labels"] == [
+        "skip_step",
+        "not_recovered",
+        "target_answer_unresolved",
+        "downstream_action_taken",
+    ]
 
 
 def test_extra_step_generation_from_extra_step_candidates() -> None:
@@ -129,7 +137,12 @@ def test_wrong_order_not_recovered_generation() -> None:
         "done",
     ]
     assert spec["expected_outcome"] == "task_failed"
-    assert spec["labels"] == ["wrong_order", "not_recovered", "task_failed"]
+    assert spec["labels"] == [
+        "wrong_order",
+        "not_recovered",
+        "target_answer_unresolved",
+        "downstream_action_taken",
+    ]
 
 
 def test_wrong_tool_generation_from_confusion_edges() -> None:
@@ -160,7 +173,12 @@ def test_wrong_tool_not_recovered_generation() -> None:
         "done",
     ]
     assert spec["expected_outcome"] == "task_failed"
-    assert spec["labels"] == ["wrong_tool", "not_recovered", "task_failed"]
+    assert spec["labels"] == [
+        "wrong_tool",
+        "not_recovered",
+        "target_answer_unresolved",
+        "downstream_action_taken",
+    ]
 
 
 def test_wrong_parameter_generation() -> None:
@@ -183,10 +201,16 @@ def test_wrong_parameter_not_recovered_generation() -> None:
     assert spec["trace"] == [
         "verify_customer_session",
         "wrong_parameter@get_status_payment",
+        "create_payment_inquiry",
         "done",
     ]
     assert spec["expected_outcome"] == "task_failed"
-    assert spec["labels"] == ["wrong_parameter", "not_recovered", "task_failed"]
+    assert spec["labels"] == [
+        "wrong_parameter",
+        "not_recovered",
+        "target_answer_unresolved",
+        "downstream_action_taken",
+    ]
 
 
 def test_tool_failure_scenarios_are_not_generated() -> None:

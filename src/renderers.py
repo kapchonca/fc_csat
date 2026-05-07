@@ -77,8 +77,9 @@ class APIRenderer(DialogueRenderer):
         if config.get("reasoning_effort"):
             payload["reasoning_effort"] = config["reasoning_effort"]
         payload.update(config.get("extra_payload", {}))
-        if config.get("response_format_json"):
-            payload["response_format"] = {"type": "json_object"}
+        response_format = _response_format(config)
+        if response_format is not None:
+            payload["response_format"] = response_format
 
         body = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
@@ -174,6 +175,77 @@ def _api_headers(config: dict[str, Any], provider: str, api_key: str) -> dict[st
             headers["X-Title"] = config["app_title"]
     headers.update(config.get("extra_headers", {}))
     return headers
+
+
+def _response_format(config: dict[str, Any]) -> dict[str, Any] | None:
+    if config.get("response_format_json"):
+        return {"type": "json_object"}
+    if config.get("response_format") != "json_schema":
+        return None
+
+    render_stage = config.get("render_stage", "dialogue")
+    if render_stage == "plan":
+        return _json_schema_response_format(
+            name="dialogue_plan",
+            array_property="plan",
+            text_property="purpose",
+            config=config,
+        )
+    return _json_schema_response_format(
+        name="dialogue_messages",
+        array_property="messages",
+        text_property="content",
+        config=config,
+    )
+
+
+def _json_schema_response_format(
+    name: str,
+    array_property: str,
+    text_property: str,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    array_schema: dict[str, Any] = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "role": {"type": "string", "enum": ["user", "assistant"]},
+                text_property: {"type": "string"},
+            },
+            "required": ["role", text_property],
+            "additionalProperties": False,
+        },
+    }
+    expected_count = _expected_message_count(config)
+    if expected_count is not None:
+        array_schema["minItems"] = expected_count
+        array_schema["maxItems"] = expected_count
+
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": name,
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    array_property: array_schema,
+                },
+                "required": [array_property],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
+def _expected_message_count(config: dict[str, Any]) -> int | None:
+    plan_config = config.get("dialogue_plan")
+    if isinstance(plan_config, dict) and plan_config.get("enabled", False):
+        message_count = plan_config.get("message_count")
+        if isinstance(message_count, int) and message_count > 0:
+            return message_count
+    return None
 
 
 def _empty_usage() -> dict[str, int]:

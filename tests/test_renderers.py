@@ -21,6 +21,34 @@ class _FakeResponse:
         ).encode("utf-8")
 
 
+class _FakePlanResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def read(self) -> bytes:
+        return json.dumps(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "plan": [
+                                        {"role": "user", "purpose": "ask"},
+                                        {"role": "assistant", "purpose": "answer"},
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+        ).encode("utf-8")
+
+
 def test_openai_renderer_uses_openai_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     captured = {}
 
@@ -40,6 +68,44 @@ def test_openai_renderer_uses_openai_defaults(monkeypatch: pytest.MonkeyPatch) -
     assert raw == '[{"role":"user","content":"hi"}]'
     assert captured["url"] == "https://api.openai.com/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer test-key"
+
+
+def test_openai_renderer_adds_json_schema_response_format(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return _FakePlanResponse()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    renderer = get_renderer({"renderer": "openai", "model": "gpt-5-mini"})
+    raw = renderer.render(
+        "prompt",
+        {
+            "renderer": "openai",
+            "model": "gpt-5-mini",
+            "response_format": "json_schema",
+            "render_stage": "plan",
+            "dialogue_plan": {
+                "enabled": True,
+                "message_count": 2,
+                "role_pattern": ["user", "assistant"],
+            },
+        },
+    )
+
+    assert json.loads(raw)["plan"][0]["purpose"] == "ask"
+    response_format = captured["payload"]["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["name"] == "dialogue_plan"
+    plan_schema = response_format["json_schema"]["schema"]["properties"]["plan"]
+    assert plan_schema["minItems"] == 2
+    assert plan_schema["maxItems"] == 2
+    assert plan_schema["items"]["required"] == ["role", "purpose"]
 
 
 def test_openrouter_renderer_uses_openrouter_defaults(

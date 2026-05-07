@@ -133,6 +133,11 @@ def validate_case_templates(case_templates: Any) -> None:
                 isinstance(item, str) and item for item in template[key]
             ):
                 raise ConfigError(f"Template {template['task']} has invalid {key}.")
+        for key in ("user_goal", "target_action", "downstream_action"):
+            if key in template and (
+                not isinstance(template[key], str) or not template[key].strip()
+            ):
+                raise ConfigError(f"Template {template['task']} has invalid {key}.")
 
 
 def validate_generation_config(generation_config: Any) -> None:

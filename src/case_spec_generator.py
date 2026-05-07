@@ -25,6 +25,7 @@ def generate_case_specs(
     for template in case_templates["templates"]:
         base_trace = list(template["base_trace"])
         _validate_base_trace(template["task"], base_trace, tools, graph["nodes"])
+        context = _template_context(template, base_trace, tools, graph["nodes"])
 
         for condition in template["conditions"]:
             spec = _generate_condition_spec(
@@ -33,6 +34,7 @@ def generate_case_specs(
                 condition=condition,
                 tools=tools,
                 graph=graph,
+                context=context,
             )
             specs.append(spec)
 
@@ -97,6 +99,7 @@ def _generate_condition_spec(
     condition: str,
     tools: dict[str, dict[str, Any]],
     graph: dict[str, Any],
+    context: dict[str, str],
 ) -> dict[str, Any]:
     if condition == "correct":
         return _spec(
@@ -107,10 +110,15 @@ def _generate_condition_spec(
             trace=base_trace,
             expected_outcome=EXPECTED_OUTCOME_COMPLETED,
             labels=["correct", EXPECTED_OUTCOME_COMPLETED],
+            context=context,
         )
 
     if condition == "skip_step":
-        skipped = _choose_skip_action(base_trace, graph["hard_precondition_edges"])
+        skipped = _choose_target_or_skip_action(
+            context,
+            base_trace,
+            graph["hard_precondition_edges"],
+        )
         trace = _insert_error_before(base_trace, "skip_step", skipped)
         return _spec(
             task=task,
@@ -120,10 +128,15 @@ def _generate_condition_spec(
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_COMPLETED,
             labels=["skip_step", "recovered", EXPECTED_OUTCOME_COMPLETED],
+            context=context,
         )
 
     if condition == "skip_step_not_recovered":
-        skipped = _choose_skip_action(base_trace, graph["hard_precondition_edges"])
+        skipped = _choose_target_or_skip_action(
+            context,
+            base_trace,
+            graph["hard_precondition_edges"],
+        )
         trace = _replace_with_error_marker(base_trace, "skip_step", skipped)
         return _spec(
             task=task,
@@ -132,7 +145,8 @@ def _generate_condition_spec(
             error={"type": "skip_step", "at": skipped, "recovered": False},
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_FAILED,
-            labels=["skip_step", "not_recovered", EXPECTED_OUTCOME_FAILED],
+            labels=_not_recovered_labels("skip_step", context),
+            context=context,
         )
 
     if condition == "extra_step":
@@ -150,10 +164,15 @@ def _generate_condition_spec(
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_COMPLETED,
             labels=["extra_step", EXPECTED_OUTCOME_COMPLETED],
+            context=context,
         )
 
     if condition == "wrong_order":
-        before, after = _choose_hard_precondition(base_trace, graph["hard_precondition_edges"])
+        before, after = _choose_order_pair(
+            context,
+            base_trace,
+            graph["hard_precondition_edges"],
+        )
         trace = list(base_trace)
         before_index = trace.index(before)
         after_index = trace.index(after)
@@ -172,10 +191,12 @@ def _generate_condition_spec(
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_COMPLETED,
             labels=["wrong_order", "recovered", EXPECTED_OUTCOME_COMPLETED],
+            context=context,
         )
 
     if condition == "wrong_order_not_recovered":
-        before, after = _choose_hard_precondition(
+        before, after = _choose_order_pair(
+            context,
             base_trace,
             graph["hard_precondition_edges"],
         )
@@ -195,7 +216,8 @@ def _generate_condition_spec(
             },
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_FAILED,
-            labels=["wrong_order", "not_recovered", EXPECTED_OUTCOME_FAILED],
+            labels=_not_recovered_labels("wrong_order", context),
+            context=context,
         )
 
     if condition == "wrong_tool":
@@ -204,6 +226,7 @@ def _generate_condition_spec(
             graph["confusion_edges"],
             tools,
             graph["nodes"],
+            preferred_action=context.get("target_action"),
         )
         trace = _insert_before(base_trace, expected, replacement)
         return _spec(
@@ -219,6 +242,7 @@ def _generate_condition_spec(
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_COMPLETED,
             labels=["wrong_tool", "recovered", EXPECTED_OUTCOME_COMPLETED],
+            context=context,
         )
 
     if condition == "wrong_tool_not_recovered":
@@ -227,6 +251,7 @@ def _generate_condition_spec(
             graph["confusion_edges"],
             tools,
             graph["nodes"],
+            preferred_action=context.get("target_action"),
         )
         trace = _replace_action(base_trace, expected, replacement)
         return _spec(
@@ -241,11 +266,13 @@ def _generate_condition_spec(
             },
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_FAILED,
-            labels=["wrong_tool", "not_recovered", EXPECTED_OUTCOME_FAILED],
+            labels=_not_recovered_labels("wrong_tool", context),
+            context=context,
         )
 
     if condition == "wrong_parameter":
-        tool_id = _choose_error_tool(
+        tool_id = _choose_parameter_error_tool(
+            context,
             "wrong_parameter",
             base_trace,
             tools,
@@ -259,15 +286,17 @@ def _generate_condition_spec(
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_COMPLETED,
             labels=["wrong_parameter", "recovered", EXPECTED_OUTCOME_COMPLETED],
+            context=context,
         )
 
     if condition == "wrong_parameter_not_recovered":
-        tool_id = _choose_error_tool(
+        tool_id = _choose_parameter_error_tool(
+            context,
             "wrong_parameter",
             base_trace,
             tools,
         )
-        trace = _insert_terminal_error(base_trace, "wrong_parameter", tool_id)
+        trace = _wrong_parameter_not_recovered_trace(base_trace, tool_id, context)
         return _spec(
             task=task,
             condition=condition,
@@ -275,7 +304,8 @@ def _generate_condition_spec(
             error={"type": "wrong_parameter", "at": tool_id, "recovered": False},
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_FAILED,
-            labels=["wrong_parameter", "not_recovered", EXPECTED_OUTCOME_FAILED],
+            labels=_not_recovered_labels("wrong_parameter", context),
+            context=context,
         )
 
     raise CaseSpecError(f"Unsupported condition: {condition}")
@@ -289,9 +319,10 @@ def _spec(
     trace: list[str],
     expected_outcome: str,
     labels: list[str],
+    context: dict[str, str],
 ) -> dict[str, Any]:
     suffix = "_".join([condition, *parts]) if parts else condition
-    return {
+    spec = {
         "case_id": f"{task}_{suffix}",
         "task": task,
         "condition": condition,
@@ -300,6 +331,10 @@ def _spec(
         "expected_outcome": expected_outcome,
         "labels": labels,
     }
+    for key in ("user_goal", "target_action", "downstream_action"):
+        if context.get(key):
+            spec[key] = context[key]
+    return spec
 
 
 def _choose_skip_action(
@@ -313,6 +348,17 @@ def _choose_skip_action(
     if not candidates:
         raise CaseSpecError("skip_step requires an intermediate action.")
     return candidates[0]
+
+
+def _choose_target_or_skip_action(
+    context: dict[str, str],
+    base_trace: list[str],
+    hard_precondition_edges: list[tuple[str, str]],
+) -> str:
+    target_action = context.get("target_action")
+    if target_action and target_action in base_trace[1:-1]:
+        return target_action
+    return _choose_skip_action(base_trace, hard_precondition_edges)
 
 
 def _choose_extra_action(
@@ -377,17 +423,62 @@ def _choose_hard_precondition(
     raise CaseSpecError("wrong_order requires a hard_precondition_edge in the base trace.")
 
 
+def _choose_order_pair(
+    context: dict[str, str],
+    base_trace: list[str],
+    hard_precondition_edges: list[tuple[str, str]],
+) -> tuple[str, str]:
+    target_action = context.get("target_action")
+    downstream_action = context.get("downstream_action")
+    preferred = (target_action, downstream_action)
+    if (
+        target_action
+        and downstream_action
+        and target_action in base_trace
+        and downstream_action in base_trace
+        and preferred in hard_precondition_edges
+    ):
+        return preferred
+    return _choose_hard_precondition(base_trace, hard_precondition_edges)
+
+
 def _choose_confused_action(
     base_trace: list[str],
     confusion_edges: set[tuple[str, str]],
     tools: dict[str, dict[str, Any]],
     graph_nodes: list[str],
+    preferred_action: str | None = None,
 ) -> tuple[str, str]:
     graph_node_set = set(graph_nodes)
+    if preferred_action:
+        for expected, replacement in confusion_edges:
+            if (
+                expected == preferred_action
+                and expected in base_trace
+                and (replacement in tools or replacement in graph_node_set)
+            ):
+                return expected, replacement
     for expected, replacement in confusion_edges:
         if expected in base_trace and (replacement in tools or replacement in graph_node_set):
             return expected, replacement
     raise CaseSpecError("wrong_tool requires a confusion_edge from a base trace action.")
+
+
+def _choose_parameter_error_tool(
+    context: dict[str, str],
+    error_type: str,
+    base_trace: list[str],
+    tools: dict[str, dict[str, Any]],
+) -> str:
+    target_action = context.get("target_action")
+    if (
+        target_action
+        and target_action in base_trace
+        and target_action in tools
+        and error_type in tools[target_action]["errors"]
+    ):
+        return target_action
+    return _choose_error_tool(error_type, base_trace, tools)
 
 
 def _choose_error_tool(
@@ -413,6 +504,28 @@ def _insert_terminal_error(
     for action in base_trace:
         if action == tool_id:
             trace.append(f"{error_type}@{tool_id}")
+            break
+        trace.append(action)
+    trace.append("done")
+    return trace
+
+
+def _wrong_parameter_not_recovered_trace(
+    base_trace: list[str],
+    tool_id: str,
+    context: dict[str, str],
+) -> list[str]:
+    downstream_action = context.get("downstream_action")
+    if not downstream_action or downstream_action not in base_trace:
+        return _insert_terminal_error(base_trace, "wrong_parameter", tool_id)
+
+    trace: list[str] = []
+    for action in base_trace:
+        if action == tool_id:
+            trace.append(f"wrong_parameter@{tool_id}")
+            continue
+        if action == downstream_action:
+            trace.append(action)
             break
         trace.append(action)
     trace.append("done")
@@ -466,6 +579,43 @@ def _validate_base_trace(
     for action in base_trace:
         if action not in known:
             raise CaseSpecError(f"Template {task} references unknown action {action!r}.")
+
+
+def _template_context(
+    template: dict[str, Any],
+    base_trace: list[str],
+    tools: dict[str, dict[str, Any]],
+    graph_nodes: list[str],
+) -> dict[str, str]:
+    known = set(tools) | set(graph_nodes)
+    context: dict[str, str] = {}
+    user_goal = template.get("user_goal")
+    if isinstance(user_goal, str) and user_goal.strip():
+        context["user_goal"] = user_goal.strip()
+
+    for key in ("target_action", "downstream_action"):
+        action = template.get(key)
+        if action is None:
+            continue
+        if not isinstance(action, str) or not action:
+            raise CaseSpecError(f"Template {template['task']} has invalid {key}.")
+        if action not in known:
+            raise CaseSpecError(
+                f"Template {template['task']} {key} references unknown action {action!r}."
+            )
+        if action not in base_trace:
+            raise CaseSpecError(
+                f"Template {template['task']} {key} must be present in base_trace."
+            )
+        context[key] = action
+    return context
+
+
+def _not_recovered_labels(error_type: str, context: dict[str, str]) -> list[str]:
+    labels = [error_type, "not_recovered", "target_answer_unresolved"]
+    if context.get("downstream_action"):
+        labels.append("downstream_action_taken")
+    return labels
 
 
 def _validate_spec_shape(spec: dict[str, Any]) -> None:

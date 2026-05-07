@@ -20,19 +20,21 @@ class ParseResult:
 
 
 def parse_dialogue(raw_output: str) -> ParseResult:
-    return _parse_json_array(raw_output)
+    return _parse_json_array(raw_output, wrapper_key="messages")
 
 
 def parse_dialogue_plan(raw_output: str) -> ParseResult:
-    return _parse_json_array(raw_output)
+    return _parse_json_array(raw_output, wrapper_key="plan")
 
 
-def _parse_json_array(raw_output: str) -> ParseResult:
+def _parse_json_array(raw_output: str, wrapper_key: str) -> ParseResult:
     try:
         data = json.loads(raw_output)
     except json.JSONDecodeError:
         return ParseResult(items=None, errors=["invalid_json"])
 
+    if isinstance(data, dict) and wrapper_key in data:
+        data = data[wrapper_key]
     if not isinstance(data, list):
         return ParseResult(items=None, errors=["invalid_json"])
     return ParseResult(items=data, errors=[])
