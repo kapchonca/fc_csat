@@ -6,7 +6,7 @@ from src.validator import validate_dialogue
 
 
 def _case(case_id: str):
-    configs = load_configs("configs/product_support_debug")
+    configs = load_configs("configs")
     specs = generate_case_specs(
         configs["tool_catalog"],
         configs["action_graph"],

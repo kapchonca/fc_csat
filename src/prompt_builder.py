@@ -11,6 +11,11 @@ CONDITION_RENDERING_INSTRUCTIONS = {
         "needed. The customer reacts to the missing answer in ordinary language, "
         "then the assistant checks the missing detail and completes the request."
     ),
+    "skip_step_not_recovered": (
+        "The assistant moves ahead before giving the customer the key answer they "
+        "needed. The customer reacts to the missing answer in ordinary language, "
+        "but the assistant does not resolve the gap and the request remains incomplete."
+    ),
     "extra_step": (
         "The assistant spends time on a broader account or payment review that the "
         "customer did not ask for and that is not needed for this request. The task "
@@ -21,16 +26,32 @@ CONDITION_RENDERING_INSTRUCTIONS = {
         "actually needs one. The customer reacts to still not having the answer they "
         "asked for, then the assistant checks the payment and completes the request."
     ),
+    "wrong_order_not_recovered": (
+        "The assistant starts an inquiry before first showing whether the payment "
+        "actually needs one. The customer reacts to still not having the answer they "
+        "asked for, and the assistant does not complete the request correctly."
+    ),
     "wrong_tool": (
         "The assistant gives a broad or adjacent account answer instead of answering "
         "the specific payment question. The customer reacts because their question is "
         "still unanswered, then the assistant checks the specific payment and completes "
         "the request."
     ),
+    "wrong_tool_not_recovered": (
+        "The assistant gives a broad or adjacent account answer instead of answering "
+        "the specific payment question. The customer reacts because their question is "
+        "still unanswered, but the assistant does not correct course and the request "
+        "remains incomplete."
+    ),
     "wrong_parameter": (
         "The assistant initially relies on a vague or mistaken detail and risks focusing "
         "on the wrong payment. The customer provides a clarifying detail naturally, then "
         "the assistant uses the corrected detail and completes the request."
+    ),
+    "wrong_parameter_not_recovered": (
+        "The assistant initially relies on a vague or mistaken detail and risks focusing "
+        "on the wrong payment. The customer provides a clarifying detail naturally, but "
+        "the assistant does not use it properly and the request remains incomplete."
     ),
 }
 
@@ -225,6 +246,15 @@ def _condition_planning_instruction(
             "its status is. The assistant then answers that missing question and completes "
             "the inquiry."
         )
+    if condition == "skip_step_not_recovered":
+        return (
+            "Plan an exchange where the assistant starts moving toward a support inquiry "
+            "before telling the customer what is happening with the payment. The customer "
+            "should ask a normal follow-up like whether the payment went through or what "
+            "its status is. The assistant should not answer that missing question well, "
+            "and the final assistant message should make clear that the request is not "
+            "completed."
+        )
     if condition == "extra_step":
         return (
             "Plan an exchange where the assistant has enough detail to answer the specific "
@@ -241,6 +271,15 @@ def _condition_planning_instruction(
             "know what happened with the payment. The assistant then checks the payment, "
             "uses that answer to update the inquiry, and completes the request."
         )
+    if condition == "wrong_order_not_recovered":
+        return (
+            "Plan an exchange where the assistant opens or starts an inquiry before first "
+            "telling the customer whether the payment appears to need one. The customer "
+            "should not say this is the wrong order; they should ask why they still do not "
+            "know what happened with the payment. The assistant may check too late or give "
+            "an unclear follow-up, but the final assistant message should make clear that "
+            "the request is not completed correctly."
+        )
     if condition == "wrong_tool":
         return (
             "Plan an exchange where the assistant gives a broad adjacent answer, such as "
@@ -249,6 +288,15 @@ def _condition_planning_instruction(
             "tell them what is happening with that payment. The assistant then checks the "
             "specific payment and completes the request."
         )
+    if condition == "wrong_tool_not_recovered":
+        return (
+            "Plan an exchange where the assistant gives a broad adjacent answer, such as "
+            "a list or general payment activity, instead of answering the customer's question "
+            "about one specific payment. The customer should say that this still does not "
+            "tell them what is happening with that payment. The assistant should not fix the "
+            "focus on the specific payment, and the final assistant message should make clear "
+            "that the request is not completed."
+        )
     if condition == "wrong_parameter":
         return (
             "Plan an exchange where the assistant initially relies on a vague or mistaken "
@@ -256,6 +304,15 @@ def _condition_planning_instruction(
             "starts to focus on a payment that may not be the customer's payment. The "
             "customer should clarify naturally, without saying parameter error. The assistant "
             "then uses the corrected detail and completes the request."
+        )
+    if condition == "wrong_parameter_not_recovered":
+        return (
+            "Plan an exchange where the assistant initially relies on a vague or mistaken "
+            "detail, such as only an amount, the wrong date, or the wrong merchant, and "
+            "starts to focus on a payment that may not be the customer's payment. The "
+            "customer should clarify naturally, without saying parameter error. The assistant "
+            "should still fail to use the clarified detail properly, and the final assistant "
+            "message should make clear that the request is not completed."
         )
     return CONDITION_RENDERING_INSTRUCTIONS[condition]
 

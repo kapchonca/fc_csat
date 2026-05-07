@@ -122,6 +122,19 @@ def _generate_condition_spec(
             labels=["skip_step", "recovered", EXPECTED_OUTCOME_COMPLETED],
         )
 
+    if condition == "skip_step_not_recovered":
+        skipped = _choose_skip_action(base_trace, graph["hard_precondition_edges"])
+        trace = _replace_with_error_marker(base_trace, "skip_step", skipped)
+        return _spec(
+            task=task,
+            condition=condition,
+            parts=[skipped],
+            error={"type": "skip_step", "at": skipped, "recovered": False},
+            trace=trace,
+            expected_outcome=EXPECTED_OUTCOME_FAILED,
+            labels=["skip_step", "not_recovered", EXPECTED_OUTCOME_FAILED],
+        )
+
     if condition == "extra_step":
         anchor, extra = _choose_extra_action(
             base_trace,
@@ -161,6 +174,30 @@ def _generate_condition_spec(
             labels=["wrong_order", "recovered", EXPECTED_OUTCOME_COMPLETED],
         )
 
+    if condition == "wrong_order_not_recovered":
+        before, after = _choose_hard_precondition(
+            base_trace,
+            graph["hard_precondition_edges"],
+        )
+        trace = list(base_trace)
+        before_index = trace.index(before)
+        after_index = trace.index(after)
+        trace[before_index], trace[after_index] = trace[after_index], trace[before_index]
+        return _spec(
+            task=task,
+            condition=condition,
+            parts=[before, after],
+            error={
+                "type": "wrong_order",
+                "at": after,
+                "required_before": before,
+                "recovered": False,
+            },
+            trace=trace,
+            expected_outcome=EXPECTED_OUTCOME_FAILED,
+            labels=["wrong_order", "not_recovered", EXPECTED_OUTCOME_FAILED],
+        )
+
     if condition == "wrong_tool":
         expected, replacement = _choose_confused_action(
             base_trace,
@@ -184,6 +221,29 @@ def _generate_condition_spec(
             labels=["wrong_tool", "recovered", EXPECTED_OUTCOME_COMPLETED],
         )
 
+    if condition == "wrong_tool_not_recovered":
+        expected, replacement = _choose_confused_action(
+            base_trace,
+            graph["confusion_edges"],
+            tools,
+            graph["nodes"],
+        )
+        trace = _replace_action(base_trace, expected, replacement)
+        return _spec(
+            task=task,
+            condition=condition,
+            parts=[expected],
+            error={
+                "type": "wrong_tool",
+                "at": expected,
+                "replacement": replacement,
+                "recovered": False,
+            },
+            trace=trace,
+            expected_outcome=EXPECTED_OUTCOME_FAILED,
+            labels=["wrong_tool", "not_recovered", EXPECTED_OUTCOME_FAILED],
+        )
+
     if condition == "wrong_parameter":
         tool_id = _choose_error_tool(
             "wrong_parameter",
@@ -199,6 +259,23 @@ def _generate_condition_spec(
             trace=trace,
             expected_outcome=EXPECTED_OUTCOME_COMPLETED,
             labels=["wrong_parameter", "recovered", EXPECTED_OUTCOME_COMPLETED],
+        )
+
+    if condition == "wrong_parameter_not_recovered":
+        tool_id = _choose_error_tool(
+            "wrong_parameter",
+            base_trace,
+            tools,
+        )
+        trace = _insert_terminal_error(base_trace, "wrong_parameter", tool_id)
+        return _spec(
+            task=task,
+            condition=condition,
+            parts=[tool_id],
+            error={"type": "wrong_parameter", "at": tool_id, "recovered": False},
+            trace=trace,
+            expected_outcome=EXPECTED_OUTCOME_FAILED,
+            labels=["wrong_parameter", "not_recovered", EXPECTED_OUTCOME_FAILED],
         )
 
     raise CaseSpecError(f"Unsupported condition: {condition}")
@@ -278,6 +355,18 @@ def _insert_before(base_trace: list[str], anchor: str, action: str) -> list[str]
     return trace
 
 
+def _replace_action(base_trace: list[str], expected: str, replacement: str) -> list[str]:
+    trace = list(base_trace)
+    try:
+        index = trace.index(expected)
+    except ValueError as exc:
+        raise CaseSpecError(
+            f"Cannot replace {expected!r}; it is absent from the base trace."
+        ) from exc
+    trace[index] = replacement
+    return trace
+
+
 def _choose_hard_precondition(
     base_trace: list[str],
     hard_precondition_edges: set[tuple[str, str]],
@@ -327,6 +416,24 @@ def _insert_terminal_error(
             break
         trace.append(action)
     trace.append("done")
+    return trace
+
+
+def _replace_with_error_marker(
+    base_trace: list[str],
+    error_type: str,
+    tool_id: str,
+) -> list[str]:
+    trace: list[str] = []
+    replaced = False
+    for action in base_trace:
+        if action == tool_id and not replaced:
+            trace.append(f"{error_type}@{tool_id}")
+            replaced = True
+        else:
+            trace.append(action)
+    if not replaced:
+        raise CaseSpecError(f"Cannot replace {tool_id!r}; it is absent from the base trace.")
     return trace
 
 
