@@ -2,13 +2,17 @@
   "include_cases": [
     "payment_inquiry_correct",
     "payment_inquiry_skip_step_get_status_payment",
+    "payment_inquiry_skip_step_not_recovered_get_status_payment",
     "payment_inquiry_extra_step_get_operation_details",
     "payment_inquiry_wrong_order_get_status_payment_create_payment_inquiry",
+    "payment_inquiry_wrong_order_not_recovered_get_status_payment_create_payment_inquiry",
     "payment_inquiry_wrong_tool_get_status_payment",
-    "payment_inquiry_wrong_parameter_get_status_payment"
+    "payment_inquiry_wrong_tool_not_recovered_get_status_payment",
+    "payment_inquiry_wrong_parameter_get_status_payment",
+    "payment_inquiry_wrong_parameter_not_recovered_get_status_payment"
   ],
   "variants_per_case": 1,
-  "max_parallel_requests": 4,
+  "max_parallel_requests": 10,
   "semantic_variants": [
     {
       "id": "real_customer",
@@ -26,6 +30,7 @@
   "send_temperature": false,
   "token_limit_param": "max_completion_tokens",
   "reasoning_effort": "medium",
+  "response_format": "json_schema",
   "max_tokens": null,
   "api_key_env": "OPENAI_API_KEY",
   "pricing": {

@@ -3,6 +3,9 @@
   "templates": [
     {
       "task": "payment_inquiry",
+      "user_goal": "Find out what happened to a specific payment and open a support case only if the payment status suggests one is needed.",
+      "target_action": "get_status_payment",
+      "downstream_action": "create_payment_inquiry",
       "base_trace": [
         "verify_customer_session",
         "get_status_payment",
@@ -12,10 +15,14 @@
       "conditions": [
         "correct",
         "skip_step",
+        "skip_step_not_recovered",
         "extra_step",
         "wrong_order",
+        "wrong_order_not_recovered",
         "wrong_tool",
-        "wrong_parameter"
+        "wrong_tool_not_recovered",
+        "wrong_parameter",
+        "wrong_parameter_not_recovered"
       ]
     }
   ]
