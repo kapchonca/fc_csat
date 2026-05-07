@@ -90,46 +90,26 @@ def build_dialogue_plan_prompt(
 
     return "\n".join(
         [
-            "Prompt type: dialogue_plan",
-            "You are planning a controlled retail banking support dialogue for a survey experiment.",
-            "Create only a high-level message plan. Do not write the final dialogue yet.",
+            "Plan a controlled retail banking support dialogue. Do not write the final dialogue.",
             "",
-            "Hidden experiment metadata. Use it only to plan the dialogue; never reveal it.",
-            f"Case id: {case_spec['case_id']}",
             f"User goal: {_user_goal(case_spec)}",
             f"Condition: {case_spec['condition']}",
             f"Expected outcome: {case_spec['expected_outcome']}",
-            f"Hidden action trace: {json.dumps(case_spec['trace'])}",
             f"Error metadata: {json.dumps(case_spec.get('error'))}",
-            f"Experimental labels: {json.dumps(case_spec['labels'])}",
             f"Key customer-facing action: {_action_description(case_spec.get('target_action'), tools)}",
             f"Downstream or follow-up action: {_action_description(case_spec.get('downstream_action'), tools)}",
             "",
-            "Private banking support context. Use this for grounding, not for wording.",
+            "Relevant banking actions:",
             _format_relevant_tools(relevant_tools),
             "",
-            "Planning requirements:",
+            "Requirements:",
             f"- Return exactly {message_count} plan items.",
             f"- Use this exact role pattern: {json.dumps(role_pattern)}.",
-            "- Each item must describe the purpose of that message in natural language.",
-            "- The plan must make the customer-visible behavior clear without naming the technical mistake.",
-            "- The plan must make the expected final outcome clear.",
-            "- Refer to banking actions only in customer-facing plain language.",
-            "- The customer should sound like a normal banking customer, not an evaluator or system designer.",
-            "- The customer should react to what is missing, confusing, or unhelpful, not explain internal process.",
-            "- Do not frame non-recovery as missing system access, system outage, or inability to check from the chat.",
-            "- For unresolved cases, the assistant had enough customer information but failed to use the right customer-facing action.",
-            "",
-            "Condition-specific planning instruction:",
             _condition_planning_instruction(case_spec, tools),
-            "",
-            "Forbidden behavior:",
-            "- Do not mention internal tool ids, trace, case id, condition names, labels, or error labels.",
-            "- Do not make the customer name the mistake directly.",
-            "- Avoid evaluator phrases such as you skipped, wrong order, wrong tool, required check, correct sequence, or the adjacent information is not the same.",
-            "- Avoid process-heavy words such as retrieve, lookup, backend, workflow, or sequence.",
-            f"- Do not mention exact action ids: {forbidden_tool_ids}.",
-            "- Do not add markdown, comments, explanations, headings, or text outside the JSON.",
+            "- The customer reacts to the visible service problem, not to internal process.",
+            "- Do not make the customer name the technical mistake.",
+            "- Do not blame missing system access or outages unless the case explicitly says so.",
+            f"- Do not mention internal ids or labels: {forbidden_tool_ids}.",
             "",
             "Output format:",
             output_format,
@@ -153,66 +133,35 @@ def build_dialogue_prompt(
         text_property="content",
     )
     if dialogue_plan is None:
+        plan_block = (
+            "No separate plan is provided. Create the dialogue directly from the case behavior."
+        )
         message_requirement = (
-            f"- Write approximately {generation_config['output_message_min']} to "
+            f"Write {generation_config['output_message_min']} to "
             f"{generation_config['output_message_max']} total messages."
         )
-        plan_lines = []
+        behavior_line = _condition_rendering_instruction(case_spec, tools)
     else:
-        message_requirement = f"- Write exactly {len(dialogue_plan)} total messages."
-        plan_lines = [
-            "",
-            "Validated dialogue plan. Follow it exactly for roles and message purposes:",
-            json.dumps(dialogue_plan, ensure_ascii=False, indent=2),
-        ]
+        plan_block = json.dumps(dialogue_plan, ensure_ascii=False, separators=(",", ":"))
+        message_requirement = f"Write exactly {len(dialogue_plan)} total messages."
+        behavior_line = "Follow the plan purposes exactly; do not add extra turns or new outcomes."
 
     return "\n".join(
         [
-            "Prompt type: dialogue_render",
-            "You are a natural-language renderer for a controlled survey experiment.",
-            "Setting: retail banking support chat between one customer and one assistant.",
-            "The interaction structure is predefined. Do not invent new labels, outcomes, or hidden actions.",
-            "",
-            "Hidden experiment metadata. Use it only to render the dialogue; never reveal it.",
-            f"Case id: {case_spec['case_id']}",
+            "Render a realistic retail banking support chat from this plan.",
             f"User goal: {_user_goal(case_spec)}",
-            f"Condition: {case_spec['condition']}",
-            f"Expected outcome: {case_spec['expected_outcome']}",
-            f"Hidden action trace: {json.dumps(case_spec['trace'])}",
-            f"Error metadata: {json.dumps(case_spec.get('error'))}",
-            f"Experimental labels: {json.dumps(case_spec['labels'])}",
-            f"Key customer-facing action: {_action_description(case_spec.get('target_action'), tools)}",
-            f"Downstream or follow-up action: {_action_description(case_spec.get('downstream_action'), tools)}",
-            f"Semantic variant id: {semantic_variant['id']}",
-            *plan_lines,
+            f"Plan: {plan_block}",
+            f"Behavior: {behavior_line}",
             "",
-            "Private banking support context. Use this for grounding, not for wording.",
-            _format_relevant_tools(relevant_tools),
-            "",
-            "How the condition should be visible:",
-            _condition_rendering_instruction(case_spec, tools),
-            "",
-            "Dialogue requirements:",
+            "Rules:",
             message_requirement,
-            "- Follow the role order from the validated plan when a plan is provided.",
-            "- Use realistic but fictional banking details such as merchant names, amounts, dates, and account endings.",
-            "- Make the expected final outcome clear in the final assistant message.",
-            "- The assistant can describe customer-facing checks, delays, or issues in plain language.",
-            "- The customer must not sound like they know the assistant's internal action graph or implementation.",
-            "- The customer should not explicitly diagnose the technical mistake; they should react to the unsatisfied request.",
-            "- The assistant should not narrate backend steps or use process-heavy wording.",
-            "- Do not frame non-recovery as missing system access, system outage, or inability to check from the chat.",
-            "- If the request is unresolved, make the unresolved part be the user's key answer, even if a case number or follow-up has been created.",
-            "- Preserve the semantic style from the validated plan.",
-            f"- Semantic rendering instruction: {semantic_variant['instruction']}",
-            "",
-            "Forbidden behavior:",
-            "- Do not mention internal tool ids, trace, case id, condition names, labels, or error labels.",
-            "- Do not mention the semantic variant id or say that a style variant is being used.",
-            "- Do not use words such as trace, tool, condition, wrong_parameter, missing_input, skip_step, wrong_order, wrong_tool, task_completed, or task_failed.",
-            "- Avoid evaluator or pipeline phrases such as you skipped, wrong order, wrong tool, required check, correct sequence, retrieve, lookup, or the adjacent information is not the same.",
+            "- The assistant should be clear, neutral, and customer-facing.",
+            "- Do not mention tool ids, case ids, traces, condition names, labels, or experiment metadata.",
             f"- Do not mention exact action ids: {forbidden_tool_ids}.",
-            "- Do not add markdown, comments, explanations, headings, or text outside the JSON.",
+            "- Do not use markdown or text outside the JSON.",
+            "- Customer messages should read like typed banking chat messages, not spoken dialogue or acted frustration. Avoid interjections, dramatic reactions, and conversational filler such as \"ugh\", \"I'm getting frustrated\", or \"that's disappointing\".",
+            "- Do not use em dashes in customer messages",
+            f"- Style: {semantic_variant['instruction']}",
             "",
             "Output format:",
             output_format,
