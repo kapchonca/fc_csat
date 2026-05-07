@@ -1,0 +1,73 @@
+{
+  "include_cases": [
+    "payment_inquiry_correct",
+    "payment_inquiry_skip_step_get_status_payment",
+    "payment_inquiry_skip_step_not_recovered_get_status_payment",
+    "payment_inquiry_extra_step_get_operation_details",
+    "payment_inquiry_wrong_order_get_status_payment_create_payment_inquiry",
+    "payment_inquiry_wrong_order_not_recovered_get_status_payment_create_payment_inquiry",
+    "payment_inquiry_wrong_tool_get_status_payment",
+    "payment_inquiry_wrong_tool_not_recovered_get_status_payment",
+    "payment_inquiry_wrong_parameter_get_status_payment",
+    "payment_inquiry_wrong_parameter_not_recovered_get_status_payment",
+    "loan_payment_allocation_correct",
+    "loan_payment_allocation_skip_step_get_status_loan",
+    "loan_payment_allocation_skip_step_not_recovered_get_status_loan",
+    "loan_payment_allocation_extra_step_get_operations_loan",
+    "loan_payment_allocation_wrong_order_get_status_loan_get_loan_payment_allocation",
+    "loan_payment_allocation_wrong_order_not_recovered_get_status_loan_get_loan_payment_allocation",
+    "loan_payment_allocation_wrong_tool_get_status_loan",
+    "loan_payment_allocation_wrong_tool_not_recovered_get_status_loan",
+    "loan_payment_allocation_wrong_parameter_get_status_loan",
+    "loan_payment_allocation_wrong_parameter_not_recovered_get_status_loan"
+  ],
+  "variants_per_case": 1,
+  "max_parallel_requests": 10,
+  "semantic_variants": [
+    {
+    "id": "regular_customer",
+    "instruction": "Only the customer messages should sound like a normal banking chatbot user. The customer writes in a casual, natural way: mostly lowercase, brief but understandable, with minor vagueness, occasional abbreviations, and small typos. The customer may forget one detail at first, but should cooperate when asked. The customer should not sound technical, scripted, or like an evaluator. Assistant messages must use standard capitalization, clear grammar, and a neutral helpful banking support tone."
+  },
+  {
+    "id": "minimal_customer",
+    "instruction": "Only the customer messages should sound like a VERY low-effort chatbot user. The customer gives the minimum possible information, often in fragments, short answers, or compressed phrases. They answer only the specific question asked and rarely volunteer extra context. They may omit punctuation, use lowercase, and provide details step by step only when prompted. The customer should still be realistic and understandable, not random or incoherent. Assistant messages must use standard capitalization, clear grammar, and a neutral helpful banking support tone."
+  },
+  {
+    "id": "irritated_customer",
+    "instruction": "Only the customer messages should sound like a mildly irritated or impatient banking chatbot user. The customer is frustrated because money or payment status is unclear, but they are not abusive, insulting, or threatening. They may use sharper phrasing, short complaints, repeated questions, and mild pressure such as 'this is frustrating', 'i need a straight answer', or 'that doesn't answer my question'. The customer should still provide necessary information when asked and should not sound like an evaluator or mention internal tools, steps, or system logic. Assistant messages must use standard capitalization, clear grammar, and a neutral helpful banking support tone."
+  }
+  ],
+  "renderer": "openai",
+  "provider": "openai",
+  "model": "gpt-5-mini",
+  "temperature": 1,
+  "send_temperature": false,
+  "token_limit_param": "max_completion_tokens",
+  "reasoning_effort": "medium",
+  "response_format": "json_schema",
+  "max_tokens": null,
+  "api_key_env": "OPENAI_API_KEY",
+  "pricing": {
+    "currency": "USD",
+    "input_per_1m_tokens": 0.25,
+    "cached_input_per_1m_tokens": 0.025,
+    "output_per_1m_tokens": 2.0
+  },
+  "dialogue_plan": {
+    "enabled": true,
+    "message_count": 8,
+    "role_pattern": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+      "assistant"
+    ]
+  },
+  "validation": {
+    "forbid_tool_names": true
+  }
+}
