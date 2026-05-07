@@ -1,0 +1,22 @@
+{
+  "version": "0.1-product-support-debug",
+  "templates": [
+    {
+      "task": "payment_inquiry",
+      "base_trace": [
+        "verify_customer_session",
+        "get_status_payment",
+        "create_payment_inquiry",
+        "done"
+      ],
+      "conditions": [
+        "correct",
+        "skip_step",
+        "extra_step",
+        "wrong_order",
+        "wrong_tool",
+        "wrong_parameter"
+      ]
+    }
+  ]
+}

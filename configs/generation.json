@@ -1,0 +1,54 @@
+{
+  "include_cases": [
+    "payment_inquiry_correct",
+    "payment_inquiry_skip_step_get_status_payment",
+    "payment_inquiry_extra_step_get_operations_payment",
+    "payment_inquiry_wrong_order_get_status_payment_create_payment_inquiry",
+    "payment_inquiry_wrong_tool_get_status_payment",
+    "payment_inquiry_wrong_parameter_get_status_payment"
+  ],
+  "variants_per_case": 1,
+  "max_parallel_requests": 4,
+  "semantic_variants": [
+    {
+      "id": "real_customer",
+      "instruction": "Only the customer messages should sound like an ordinary chatbot user: lowercase, brief, informal, slightly vague, with occasional abbreviations, typos, and missing context. Assistant messages must use standard capitalization, clear grammar, and a neutral helpful banking support tone."
+    },
+    {
+      "id": "minimal_customer",
+      "instruction": "Only the customer messages should be extremely brief and low-effort, like a real chatbot user who provides the minimum necessary information. The customer should often use fragments instead of full sentences, give vague or incomplete details at first, answer only what was asked, and avoid extra context unless prompted. Customer messages may be lowercase, informal, and mildly typo-prone. Assistant messages must use standard capitalization, clear grammar, and a neutral helpful banking support tone."
+    }
+  ],
+  "renderer": "openai",
+  "provider": "openai",
+  "model": "gpt-5-mini",
+  "temperature": 1,
+  "send_temperature": false,
+  "token_limit_param": "max_completion_tokens",
+  "reasoning_effort": "medium",
+  "max_tokens": null,
+  "api_key_env": "OPENAI_API_KEY",
+  "pricing": {
+    "currency": "USD",
+    "input_per_1m_tokens": 0.25,
+    "cached_input_per_1m_tokens": 0.025,
+    "output_per_1m_tokens": 2.0
+  },
+  "dialogue_plan": {
+    "enabled": true,
+    "message_count": 8,
+    "role_pattern": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+      "assistant"
+    ]
+  },
+  "validation": {
+    "forbid_tool_names": true
+  }
+}

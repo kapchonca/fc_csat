@@ -1,0 +1,121 @@
+[
+  {
+    "id": "verify_customer_session",
+    "description": "Verify that the customer is authorized in the current support session.",
+    "inputs": ["customer_id", "session_id"],
+    "adds": ["customer_session_verified"],
+    "errors": ["missing_input", "session_not_found", "session_expired", "customer_not_authorized"]
+  },
+  {
+    "id": "list_customer_products",
+    "description": "List the customer's banking products.",
+    "inputs": ["customer_id"],
+    "adds": ["customer_products_listed"],
+    "errors": ["missing_input", "customer_not_found", "products_unavailable"]
+  },
+  {
+    "id": "get_operations_loan",
+    "description": "Retrieve operations related to customer loans.",
+    "inputs": ["customer_id", "loan_id", "period"],
+    "adds": ["loan_operations_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "loan_not_found", "loan_operations_unavailable"]
+  },
+  {
+    "id": "get_operations_payment",
+    "description": "Retrieve operations related to customer payments.",
+    "inputs": ["customer_id", "payment_hint", "period"],
+    "adds": ["payment_operations_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "payment_operations_unavailable"]
+  },
+  {
+    "id": "get_operations_debit",
+    "description": "Retrieve operations related to customer debit or deposit products.",
+    "inputs": ["customer_id", "product_id", "period"],
+    "adds": ["debit_operations_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "debit_operations_unavailable"]
+  },
+  {
+    "id": "get_applications",
+    "description": "List the customer's submitted applications.",
+    "inputs": ["customer_id", "period"],
+    "adds": ["applications_listed"],
+    "errors": ["missing_input", "applications_unavailable"]
+  },
+  {
+    "id": "get_application_details",
+    "description": "Get details for one customer application.",
+    "inputs": ["application_id"],
+    "adds": ["application_details_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "application_not_found", "application_details_unavailable"]
+  },
+  {
+    "id": "get_operation_details",
+    "description": "Get details for one banking operation.",
+    "inputs": ["operation_id"],
+    "adds": ["operation_details_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "operation_not_found", "operation_details_unavailable"]
+  },
+  {
+    "id": "get_status_loan",
+    "description": "Retrieve general status information about one loan.",
+    "inputs": ["loan_id"],
+    "adds": ["loan_status_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "loan_not_found", "loan_status_unavailable"]
+  },
+  {
+    "id": "get_status_payment",
+    "description": "Retrieve general status information about one payment.",
+    "inputs": ["payment_id"],
+    "adds": ["payment_status_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "payment_not_found", "payment_status_unavailable"]
+  },
+  {
+    "id": "get_status_debit",
+    "description": "Retrieve general status information about one debit or deposit product.",
+    "inputs": ["product_id"],
+    "adds": ["debit_status_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "debit_product_not_found", "debit_status_unavailable"]
+  },
+  {
+    "id": "get_status_application",
+    "description": "Retrieve general status information about one application.",
+    "inputs": ["application_id"],
+    "adds": ["application_status_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "application_not_found", "application_status_unavailable"]
+  },
+  {
+    "id": "get_loan_payment_allocation",
+    "description": "Show how a loan payment was allocated.",
+    "inputs": ["loan_id", "payment_id"],
+    "adds": ["loan_payment_allocation_retrieved"],
+    "errors": ["missing_input", "wrong_parameter", "loan_payment_not_found", "allocation_unavailable"]
+  },
+  {
+    "id": "create_debit_case",
+    "description": "Create a support case for a debit or deposit issue.",
+    "inputs": ["customer_id", "product_id", "reason"],
+    "adds": ["debit_case_created"],
+    "errors": ["missing_input", "wrong_parameter", "debit_case_creation_unavailable"]
+  },
+  {
+    "id": "create_payment_inquiry",
+    "description": "Create a support inquiry to dispute or investigate a payment issue.",
+    "inputs": ["customer_id", "payment_id", "reason"],
+    "adds": ["payment_inquiry_created"],
+    "errors": ["missing_input", "wrong_parameter", "payment_not_found", "payment_inquiry_creation_unavailable"]
+  },
+  {
+    "id": "create_loan_investigation_case",
+    "description": "Create a support case to investigate a loan issue.",
+    "inputs": ["customer_id", "loan_id", "reason"],
+    "adds": ["loan_investigation_case_created"],
+    "errors": ["missing_input", "wrong_parameter", "loan_case_creation_unavailable"]
+  },
+  {
+    "id": "create_application_case",
+    "description": "Create a support case for an application issue.",
+    "inputs": ["customer_id", "application_id", "reason"],
+    "adds": ["application_case_created"],
+    "errors": ["missing_input", "wrong_parameter", "application_case_creation_unavailable"]
+  }
+]
